@@ -1,0 +1,208 @@
+Description: 4 different security groups
+Parameters:
+  VPCStackName:
+    Description: Name of the VPC stack
+    Type: String
+    ConstraintDescription: Must be a name of an existing stack
+Resources:
+  VPCSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound SSH and ICMP traffic. All outbound traffic allowed.
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: ::/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIpv6: ::/0
+        - IpProtocol: icmpv6
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmpv6
+          FromPort: -1
+          ToPort: -1
+          CidrIpv6: ::/0
+      Tags:
+        - Key: Role
+          Value: VPCSG
+  DNSSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound DNS traffic. All outbound traffic allowed.
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIpv6: ::/0
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIpv6: ::/0
+      Tags:
+        - Key: Role
+          Value: DNSSG
+  MailSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound SMTP traffic. All outbound traffic allowed.
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 25
+          ToPort: 25
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 25
+          ToPort: 25
+          CidrIpv6: ::/0
+      Tags:
+        - Key: Role
+          Value: MailSG
+  WebbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound HTTP traffic. All outbound traffic allowed.
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: ::/0
+      Tags:
+        - Key: Role
+          Value: WebbSG
+  LANClientSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound Ipv6 SSH and ICMP traffic on LAN network. All outbound traffic allowed.
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6:
+            Fn::ImportValue:
+              Fn::Sub: "${VPCStackName}-PrLANSIpv6"
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIpv6:
+            Fn::ImportValue:
+              Fn::Sub: "${VPCStackName}-PrLANSIpv6"
+        - IpProtocol: icmpv6
+          FromPort: -1
+          ToPort: -1
+          CidrIpv6:
+            Fn::ImportValue:
+              Fn::Sub: "${VPCStackName}-PrLANSIpv6"
+      Tags:
+        - Key: Role
+          Value: LANClientSG
+  ResolverSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound Ipv6 SSH, ICMP and DNS traffic on LAN network. All outbound traffic allowed.
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6:
+            Fn::ImportValue:
+              Fn::Sub: "${VPCStackName}-PrLANSIpv6"
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIpv6:
+            Fn::ImportValue:
+              Fn::Sub: "${VPCStackName}-PrLANSIpv6"
+        - IpProtocol: icmpv6
+          FromPort: -1
+          ToPort: -1
+          CidrIpv6:
+            Fn::ImportValue:
+              Fn::Sub: "${VPCStackName}-PrLANSIpv6"
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIpv6:
+            Fn::ImportValue:
+              Fn::Sub: "${VPCStackName}-PrLANSIpv6"
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIpv6:
+            Fn::ImportValue:
+              Fn::Sub: "${VPCStackName}-PrLANSIpv6"
+      Tags:
+        - Key: Role
+          Value: ResolverSG
+Outputs:
+  StackVPCSG:
+    Description: The ID of the VPCSG
+    Value: !Ref VPCSG
+    Export:
+      Name: !Sub "${VPCStackName}-VPCSGID"
+  StackDNSSG:
+    Description: The ID of the DNSSG
+    Value: !Ref DNSSG
+    Export:
+      Name: !Sub "${VPCStackName}-DNSSGID"
+  StackMailSG:
+    Description: The ID of the MailSG
+    Value: !Ref MailSG
+    Export:
+      Name: !Sub "${VPCStackName}-MailSGID"
+  StackWebbSG:
+    Description: The ID of the WebbSG
+    Value: !Ref WebbSG
+    Export:
+      Name: !Sub "${VPCStackName}-WebbSGID"
+  StackLANClientSG:
+    Description: The ID of the LANClientSG
+    Value: !Ref LANClientSG
+    Export:
+      Name: !Sub "${VPCStackName}-LANClientSGID"
+  StackResolverSG:
+    Description: The ID of the ResolverSG
+    Value: !Ref ResolverSG
+    Export:
+      Name: !Sub "${VPCStackName}-ResolverSGID"

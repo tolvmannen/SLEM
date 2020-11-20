@@ -1,0 +1,81 @@
+Description: Jumpgate
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  HostName:
+    Description: Hostname for the Jumpgate
+    Type: String
+  StudentKey:
+    Description: SSH key for student access
+    Type: String
+  VPCStackName:
+    Description: Name of the VPC stack
+    Type: String
+    ConstraintDescription: Must be a name of an existing stack
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0dba2cb6798deb6d8
+    us-west-1:
+      AMI: ami-021809d9177640a20
+    eu-west-1:
+      AMI: ami-06fd8a495a537da8b
+    eu-north-1:
+      AMI: ami-008dea09a148cea39
+    eu-central-1:
+      AMI: ami-0c960b947cbb2dd16
+    ap-southeast-1:
+      AMI: ami-093da183b859d5a4b
+    ap-northeast-1:
+      AMI: ami-09b86f9709b3c33d4
+Resources:
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceType: t3.micro
+      SecurityGroupIds:
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-VPCSGID"
+      KeyName: !Ref 'KeyName'
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-PrLANSID"
+      PrivateIpAddress: 10.0.55.22
+      Ipv6Addresses:
+        - Ipv6Address:
+            Fn::Sub:
+              - "${SubnetPart}${InstancePart}"
+              - SubnetPart: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PrLANSIpv6"]]
+                InstancePart: "22"
+      Tags:
+        - Key: Subnet
+          Value: LAN
+        - Key: Role
+          Value: Jumpgate
+      UserData: !Base64
+        Fn::Sub: |
+          #cloud-config
+          package_update: true
+          package_upgrade: true
+          packages:
+            - zonemaster-cli
+            - dnsutils
+            - net-tools
+          write_files:
+            - path: /etc/systemd/resolved.conf
+              content: |
+                [Resolve]
+                DNS=10.0.55.53
+          runcmd:
+            - hostnamectl set-hostname ${HostName}
+            - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
+            - printf ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
+            - systemctl restart zonemaster-cli
+            - systemctl restart dnsutils
+            - systemctl restart systemd-resolved

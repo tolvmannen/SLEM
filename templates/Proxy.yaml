@@ -1,0 +1,168 @@
+Description: Proxy server, nginx and sshd
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  HostName:
+    Description: Hostname for the proxy
+    Type: String
+  VPCStackName:
+    Description: Name of the VPC stack
+    Type: String
+    ConstraintDescription: Must be a name of an existing stack
+  Ipv4Pool:
+    Description: Amazon provided Ipv4 address pool (1) or bring your own Ipv4 address pool (2)
+    Type: Number
+    AllowedValues: [1, 2]
+  BYOIP:
+    Description: Id of your own Ipv4 address pool, only fill this field if you chose to bring your own Ipv4 pool (2)
+    Type: String
+Conditions:
+  Ipv4PoolIsBYOIP: !Equals [ !Ref Ipv4Pool, 2]
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0dba2cb6798deb6d8
+    us-west-1:
+      AMI: ami-021809d9177640a20
+    eu-west-1:
+      AMI: ami-06fd8a495a537da8b
+    eu-north-1:
+      AMI: ami-008dea09a148cea39
+    eu-central-1:
+      AMI: ami-0c960b947cbb2dd16
+    ap-southeast-1:
+      AMI: ami-093da183b859d5a4b
+    ap-northeast-1:
+      AMI: ami-09b86f9709b3c33d4
+Resources:
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceType: t3.micro
+      KeyName: !Ref 'KeyName'
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref MyENI
+          DeviceIndex: 0
+      Tags:
+        - Key: Role
+          Value: Proxy
+      UserData: !Base64
+        Fn::Sub: |
+          #cloud-config
+          package_update: true
+          package_upgrade: true
+          packages:
+            - nginx
+            - net-tools
+          write_files:
+            - path: /etc/ssh/sshd_config.d/proxy_ssh.conf
+              content: |
+                Port 22
+                AddressFamily any
+                ListenAddress 10.0.99.22
+            - path: /etc/nginx/nginx.conf
+              content: |
+                user www-data;
+                worker_processes auto;
+                pid /run/nginx.pid;
+                include /etc/nginx/modules-enabled/*.conf;
+
+                events {
+                  worker_connections 768;
+                  # multi_accept on;
+                }
+
+                stream{
+                  server{
+                    listen 10.0.99.33:53;
+                    listen 10.0.99.33:53 udp;
+                    proxy_pass 10.0.77.53:53;
+                  }
+                  server{
+                    listen 10.0.99.33:80;
+                    proxy_pass 10.0.77.80:80;
+                  }
+                  server{
+                    listen 10.0.99.33:22;
+                    proxy_pass 10.0.55.22:22;
+                  }
+                  server{
+                    listen 10.0.99.33:25;
+                    proxy_pass 10.0.77.25:25;
+                  }
+                }
+          runcmd:
+            - service nginx restart
+            - service ssh restart
+            - hostnamectl set-hostname ${HostName}
+            - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
+  MyENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      PrivateIpAddresses:
+        - Primary: true
+          PrivateIpAddress: 10.0.99.33
+        - Primary: false
+          PrivateIpAddress: 10.0.99.22
+      Ipv6Addresses:
+        - Ipv6Address:
+            Fn::Sub:
+              - "${SubnetPart}${InstancePart}"
+              - SubnetPart: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PuSIpv6"]]
+                InstancePart: "22"
+        - Ipv6Address:
+            Fn::Sub:
+              - "${SubnetPart}${InstancePart}"
+              - SubnetPart: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PuSIpv6"]]
+                InstancePart: "33"
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-PuSID"
+      GroupSet:
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-VPCSGID"
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-DNSSGID"
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-MailSGID"
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-WebbSGID"
+      Tags:
+        - Key: Subnet
+          Value: Public
+        - Key: Role
+          Value: NetworkInterfaceProxy
+  MyPrimaryEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      PublicIpv4Pool: !If [Ipv4PoolIsBYOIP, !Ref BYOIP, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Role
+          Value: EIPPrimaryProxy
+  MySecondaryEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      PublicIpv4Pool: !If [Ipv4PoolIsBYOIP, !Ref BYOIP, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Role
+          Value: EIPSecondaryProxy
+  MyPrimaryEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MyPrimaryEIP.AllocationId
+      NetworkInterfaceId: !Ref MyENI
+      PrivateIpAddress: 10.0.99.33
+  MySecondaryEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MySecondaryEIP.AllocationId
+      NetworkInterfaceId: !Ref MyENI
+      PrivateIpAddress: 10.0.99.22

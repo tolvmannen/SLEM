@@ -1,0 +1,97 @@
+Description: Webserver, nginx
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  StudentKey:
+    Description: SSH key for student access
+    Type: String
+  HostName:
+    Description: Hostname for the Webbserver
+    Type: String
+  VPCStackName:
+    Description: Name of the VPC stack
+    Type: String
+    ConstraintDescription: Must be a name of an existing stack
+  DomainName:
+    Description: A valid domain name
+    Type: String
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0dba2cb6798deb6d8
+    us-west-1:
+      AMI: ami-021809d9177640a20
+    eu-west-1:
+      AMI: ami-06fd8a495a537da8b
+    eu-north-1:
+      AMI: ami-008dea09a148cea39
+    eu-central-1:
+      AMI: ami-0c960b947cbb2dd16
+    ap-southeast-1:
+      AMI: ami-093da183b859d5a4b
+    ap-northeast-1:
+      AMI: ami-09b86f9709b3c33d4
+Resources:
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceType: t3.micro
+      SecurityGroupIds:
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-VPCSGID"
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-WebbSGID"
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-PrDMZSID"
+      PrivateIpAddress: 10.0.77.80
+      Ipv6Addresses:
+        - Ipv6Address:
+            Fn::Sub:
+              - "${SubnetPart}${InstancePart}"
+              - SubnetPart: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PrDMZSIpv6"]]
+                InstancePart: "80"
+      KeyName: !Ref 'KeyName'
+      Tags:
+        - Key: Subnet
+          Value: DMZ
+        - Key: Role
+          Value: Webbserver
+      UserData: !Base64
+        Fn::Sub: |
+          #cloud-config
+          package_update: true
+          package_upgrade: true
+          packages:
+            - nginx
+            - net-tools
+          write_files:
+            - path: /etc/nginx/sites-available/${DomainName}
+              content: |
+                server {
+                listen 80;
+                server_name ${DomainName} www.${DomainName};
+                root /var/www/${DomainName}/html;
+                index index.html index.htm index.nginx-debian.html;
+                }
+            - path: /var/www/${DomainName}/html/index.html
+              content: |
+                <!DOCTYPE html>
+                  <html>
+                    <body>
+                    <title>Welcome to ${DomainName}</title>
+                      <h1>Success!  The ${DomainName} server block is working!</h1>
+                    </body>
+                  </html>
+          runcmd:
+            - ln -s /etc/nginx/sites-available/${DomainName} /etc/nginx/sites-enabled/${DomainName}
+            - service nginx reload
+            - hostnamectl set-hostname ${HostName}
+            - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
+            - printf ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys

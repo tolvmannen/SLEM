@@ -1,0 +1,135 @@
+Description: LAN client that answers on ping
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  HostName:
+    Description: Hostname for the LAN client
+    Type: String
+  VPCStackName:
+    Description: Name of the VPC stack
+    Type: String
+    ConstraintDescription: Must be a name of an existing stack
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0dba2cb6798deb6d8
+    us-west-1:
+      AMI: ami-021809d9177640a20
+    eu-west-1:
+      AMI: ami-06fd8a495a537da8b
+    eu-north-1:
+      AMI: ami-008dea09a148cea39
+    eu-central-1:
+      AMI: ami-0c960b947cbb2dd16
+    ap-southeast-1:
+      AMI: ami-093da183b859d5a4b
+    ap-northeast-1:
+      AMI: ami-09b86f9709b3c33d4
+Resources:
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceType: t3.micro
+      KeyName: !Ref 'KeyName'
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref MyPrimaryENI
+          DeviceIndex: 0
+        - NetworkInterfaceId: !Ref MySecondaryENI
+          DeviceIndex: 1
+      Tags:
+        - Key: Role
+          Value: LANClient
+      UserData:
+        Fn::Base64: !Sub
+          - |
+            #cloud-config
+            package_update: true
+            package_upgrade: true
+            packages:
+              - net-tools
+            runcmd:
+              - hostnamectl set-hostname ${HostName}
+              - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
+              - ip route add default via 10.0.55.1 dev ens5 tab 1
+              - ip route add default via 10.0.55.1 dev ens6 tab 2
+              - ip rule add from 10.0.55.110/32 tab 1
+              - ip rule add from 10.0.55.111/32 tab 1
+              - ip rule add from 10.0.55.112/32 tab 2
+              - ip rule add from 10.0.55.113/32 tab 2
+              - ip -6 route add default via $(ip -6 route show | egrep 'dev ens5' | egrep '^default' | awk '{print $3}') dev ens5 tab 1
+              - ip -6 route add default via $(ip -6 route show | egrep 'dev ens5' | egrep '^default' | awk '{print $3}') dev ens6 tab 2
+              - ip -6 rule add from ${CidrBlock}110/128 tab 1
+              - ip -6 rule add from ${CidrBlock}111/128 tab 1
+              - ip -6 rule add from ${CidrBlock}112/128 tab 2
+              - ip -6 rule add from ${CidrBlock}113/128 tab 2
+          - CidrBlock: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PrLANSIpv6"]]
+  MyPrimaryENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      PrivateIpAddresses:
+        - Primary: true
+          PrivateIpAddress: 10.0.55.110
+        - Primary: false
+          PrivateIpAddress: 10.0.55.111
+      Ipv6Addresses:
+        - Ipv6Address:
+            Fn::Sub:
+              - "${SubnetPart}${InstancePart}"
+              - SubnetPart: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PrLANSIpv6"]]
+                InstancePart: "110"
+        - Ipv6Address:
+            Fn::Sub:
+              - "${SubnetPart}${InstancePart}"
+              - SubnetPart: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PrLANSIpv6"]]
+                InstancePart: "111"
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-PrLANSID"
+      GroupSet:
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-VPCSGID"
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-LANClientSGID"
+      Tags:
+        - Key: Subnet
+          Value: LAN
+        - Key: Role
+          Value: ENIPrimaryClient
+  MySecondaryENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      PrivateIpAddresses:
+        - Primary: true
+          PrivateIpAddress: 10.0.55.112
+        - Primary: false
+          PrivateIpAddress: 10.0.55.113
+      Ipv6Addresses:
+        - Ipv6Address:
+            Fn::Sub:
+              - "${SubnetPart}${InstancePart}"
+              - SubnetPart: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PrLANSIpv6"]]
+                InstancePart: "112"
+        - Ipv6Address:
+            Fn::Sub:
+              - "${SubnetPart}${InstancePart}"
+              - SubnetPart: !Select [ 0, !Split [ "/", Fn::ImportValue: !Sub "${VPCStackName}-PrLANSIpv6"]]
+                InstancePart: "113"
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: "${VPCStackName}-PrLANSID"
+      GroupSet:
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-VPCSGID"
+        - Fn::ImportValue:
+            Fn::Sub: "${VPCStackName}-LANClientSGID"
+      Tags:
+        - Key: Subnet
+          Value: LAN
+        - Key: Role
+          Value: ENISecondaryClient
