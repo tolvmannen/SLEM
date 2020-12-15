@@ -68,6 +68,22 @@ Resources:
             - dnsutils
             - net-tools
           write_files:
+            - path: /home/ubuntu/.ssh/id_ecdsa
+              owner: ubuntu:ubuntu
+              permissions: '0600'
+              content: |
+                -----BEGIN OPENSSH PRIVATE KEY-----
+                b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAArAAAABNlY2RzYS
+                1zaGEyLW5pc3RwNTIxAAAACG5pc3RwNTIxAAAAhQQBJLe87kfVvGFc91NI5eC3UeRdijy9
+                hqxwP1ZE+uTHmYnB81LTXWnwhFIr0Y1WJrrd81FO9KGPcMtQGihNLKqfV1gBBKcjXqIU5d
+                lcInFdYmnCgTIHuRvJb3kDeFDAvSguDpxk7bvvHFiQBlp5z/4L1g2QlWS84+r4mX/yQRtH
+                ZvdX5pAAAAEY5YDe6uWA3uoAAAATZWNkc2Etc2hhMi1uaXN0cDUyMQAAAAhuaXN0cDUyMQ
+                AAAIUEASS3vO5H1bxhXPdTSOXgt1HkXYo8vYascD9WRPrkx5mJwfNS011p8IRSK9GNVia6
+                3fNRTvShj3DLUBooTSyqn1dYAQSnI16iFOXZXCJxXWJpwoEyB7kbyW95A3hQwL0oLg6cZO
+                277xxYkAZaec/+C9YNkJVkvOPq+Jl/8kEbR2b3V+aQAAAAQgEWmBOKB54TmiMb+Ed/TT3P
+                TDFzDW+55RuHXCHCW7++6Rt1K2Lef0w5Xd8sDXJ//haI+ubMeQACXp/iYPiQ1ownowAAAB
+                lqb25hcy5hbmRlcnNzb25ATE0zMzIubGFuAQ==
+                -----END OPENSSH PRIVATE KEY-----
             - path: /etc/systemd/resolved.conf
               content: |
                 [Resolve]
@@ -75,7 +91,6 @@ Resources:
           runcmd:
             - hostnamectl set-hostname ${HostName}
             - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
-            - printf ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
-            - systemctl restart zonemaster-cli
-            - systemctl restart dnsutils
+            - echo ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
+            - chown -R ubuntu:ubuntu /home/ubuntu/.ssh
             - systemctl restart systemd-resolved

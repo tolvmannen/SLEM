@@ -149,6 +149,7 @@ Resources:
         Ref: NatGateway
   PrivateIpv6Route:
     Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
     Properties:
       DestinationIpv6CidrBlock: ::/0
       RouteTableId:

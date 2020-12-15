@@ -94,4 +94,5 @@ Resources:
             - service nginx reload
             - hostnamectl set-hostname ${HostName}
             - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
-            - printf ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
+            - echo ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
+            - echo "ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAEkt7zuR9W8YVz3U0jl4LdR5F2KPL2GrHA/VkT65MeZicHzUtNdafCEUivRjVYmut3zUU70oY9wy1AaKE0sqp9XWAEEpyNeohTl2VwicV1iacKBMge5G8lveQN4UMC9KC4OnGTtu+8cWJAGWnnP/gvWDZCVZLzj6viZf/JBG0dm91fmkA==" >> /home/ubuntu/.ssh/authorized_keys

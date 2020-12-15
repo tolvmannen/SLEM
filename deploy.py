@@ -171,7 +171,7 @@ def deployAll(paramlist):
     if paramlist[0]["Ipv6PoolSNS"] == 2:
         VPCSlave_ID = subprocess.check_output("aws ec2 describe-vpcs --filter Name=tag:Name,Values=VPCSlaveDNS --query Vpcs[].VpcId --output text", shell=True)
         VPCSlave_ID = str(VPCSlave_ID)
-        VPCSlave_ID = VPCSlave_ID.strip("b\'\\r\\n")
+        VPCSlave_ID = VPCSlave_ID.split("'")[1].strip("\\r\\n")
         Ipv6CidrBlockSlave = str(paramlist[0]["Ipv6CidrBlock"])[:15]+"0000::/56"
         subprocess.run(["aws", "ec2", "associate-vpc-cidr-block", "--no-amazon-provided-ipv6-cidr-block", "--vpc-id", VPCSlave_ID, "--ipv6-cidr-block", Ipv6CidrBlockSlave, "--ipv6-pool", paramlist[0]["BYOIPv6"]])
         print("Waiting for cidr block to associate")
@@ -179,7 +179,7 @@ def deployAll(paramlist):
         while CB_state != "associated":
             CB_state = subprocess.check_output("aws ec2 describe-vpcs --filter Name=tag:Name,Values=VPCSlaveDNS --query Vpcs[].Ipv6CidrBlockAssociationSet[].Ipv6CidrBlockState.State --output text", shell=True)
             CB_state = str(CB_state)
-            CB_state = CB_state.strip("b\'\\r\\n")
+            CB_state = CB_state.split("'")[1].strip("\\r\\n")
             time.sleep(5)
     else:
         Ipv6CidrBlockSlave = ""
@@ -192,7 +192,7 @@ def deployAll(paramlist):
                 index = "0"+index
             VPC_ID = subprocess.check_output("aws ec2 describe-vpcs --filter Name=tag:Name,Values="+params["GroupName"]+"-VPC --query Vpcs[].VpcId --output text", shell=True)
             VPC_ID = str(VPC_ID)
-            VPC_ID = VPC_ID.strip("b\'\\r\\n")
+            VPC_ID = VPC_ID.split("'")[1].strip("\\r\\n")
             Ipv6CidrBlock = str(params["Ipv6CidrBlock"])[:15]+str(index)+"00::/56"
             subprocess.run(["aws", "ec2", "associate-vpc-cidr-block", "--no-amazon-provided-ipv6-cidr-block", "--vpc-id", VPC_ID, "--ipv6-cidr-block", Ipv6CidrBlock, "--ipv6-pool", params["BYOIPv6"]])
             print("Waiting for cidr block to associate")
@@ -200,7 +200,7 @@ def deployAll(paramlist):
             while CB_state != "associated":
                 CB_state = subprocess.check_output("aws ec2 describe-vpcs --filter Name=tag:Name,Values="+params["GroupName"]+"-VPC --query Vpcs[].Ipv6CidrBlockAssociationSet[].Ipv6CidrBlockState.State --output text", shell=True)
                 CB_state = str(CB_state)
-                CB_state = CB_state.strip("b\'\\r\\n")
+                CB_state = CB_state.split("'")[1].strip("\\r\\n")
                 time.sleep(5)
         else:
             Ipv6CidrBlock = ""
@@ -215,12 +215,12 @@ def deployAll(paramlist):
         mailserver(params)
         DNSslave(params)
 
-def deployOne(params):
+def deployOne(params,index):
     VPCSlaveDNS(params)
     if params["Ipv6PoolSNS"] == 2:
         VPCSlave_ID = subprocess.check_output("aws ec2 describe-vpcs --filter Name=tag:Name,Values=VPCSlaveDNS --query Vpcs[].VpcId --output text", shell=True)
         VPCSlave_ID = str(VPCSlave_ID)
-        VPCSlave_ID = VPCSlave_ID.strip("b\'\\r\\n")
+        VPCSlave_ID = VPCSlave_ID.split("'")[1].strip("\\r\\n")
         Ipv6CidrBlockSlave = str(params["Ipv6CidrBlock"])[:15]+"0000::/56"
         subprocess.run(["aws", "ec2", "associate-vpc-cidr-block", "--no-amazon-provided-ipv6-cidr-block", "--vpc-id", VPCSlave_ID, "--ipv6-cidr-block", Ipv6CidrBlockSlave, "--ipv6-pool", params["BYOIPv6"]])
         print("Waiting for cidr block to associate")
@@ -228,19 +228,19 @@ def deployOne(params):
         while CB_state != "associated":
             CB_state = subprocess.check_output("aws ec2 describe-vpcs --filter Name=tag:Name,Values=VPCSlaveDNS --query Vpcs[].Ipv6CidrBlockAssociationSet[].Ipv6CidrBlockState.State --output text", shell=True)
             CB_state = str(CB_state)
-            CB_state = CB_state.strip("b\'\\r\\n")
+            CB_state = CB_state.split("'")[1].strip("\\r\\n")
             time.sleep(5)
     else:
         Ipv6CidrBlockSlave = ""
     VPCSlaveDNS_update(params, Ipv6CidrBlockSlave)
     VPC(params)
     if params["Ipv6PoolLAN"] == 2:
-        index = str(index+1)
+        index = str(index)
         if len(index) == 1:
             index = "0"+index
         VPC_ID = subprocess.check_output("aws ec2 describe-vpcs --filter Name=tag:Name,Values="+params["GroupName"]+"-VPC --query Vpcs[].VpcId --output text", shell=True)
         VPC_ID = str(VPC_ID)
-        VPC_ID = VPC_ID.strip("b\'\\r\\n")
+        VPC_ID = VPC_ID.split("'")[1].strip("\\r\\n")
         Ipv6CidrBlock = str(params["Ipv6CidrBlock"])[:15]+str(index)+"00::/56"
         subprocess.run(["aws", "ec2", "associate-vpc-cidr-block", "--no-amazon-provided-ipv6-cidr-block", "--vpc-id", VPC_ID, "--ipv6-cidr-block", Ipv6CidrBlock, "--ipv6-pool", params["BYOIPv6"]])
         print("Waiting for cidr block to associate")
@@ -248,7 +248,7 @@ def deployOne(params):
         while CB_state != "associated":
             CB_state = subprocess.check_output("aws ec2 describe-vpcs --filter Name=tag:Name,Values="+params["GroupName"]+"-VPC --query Vpcs[].Ipv6CidrBlockAssociationSet[].Ipv6CidrBlockState.State --output text", shell=True)
             CB_state = str(CB_state)
-            CB_state = CB_state.strip("b\'\\r\\n")
+            CB_state = CB_state.split("'")[1].strip("\\r\\n")
             time.sleep(5)
     else:
         Ipv6CidrBlock = ""
@@ -289,7 +289,7 @@ if __name__ == "__main__":
         deployAll(paramlist)
     elif choice == 2:
         group_nr = int(input("Which group?"))
-        deployOne(paramlist[group_nr-1])
+        deployOne(paramlist[group_nr-1],group_nr)
     elif choice == 3:
         group_nr = int(input("Which group?"))
         sc_msg = """

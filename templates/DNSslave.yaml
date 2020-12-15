@@ -71,11 +71,12 @@ Resources:
           packages:
             - bind9
             - net-tools
+            - bind9utils
           runcmd:
             - systemctl restart bind9
             - hostnamectl set-hostname ${HostName}
             - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
-            - printf ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
+            - echo ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
   MyEIP:
     Type: AWS::EC2::EIP
     Properties:

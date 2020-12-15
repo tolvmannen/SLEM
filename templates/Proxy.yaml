@@ -156,12 +156,14 @@ Resources:
           Value: EIPSecondaryProxy
   MyPrimaryEIPAssociation:
     Type: AWS::EC2::EIPAssociation
+    DependsOn: MyEC2Instance
     Properties:
       AllocationId: !GetAtt MyPrimaryEIP.AllocationId
       NetworkInterfaceId: !Ref MyENI
       PrivateIpAddress: 10.0.99.33
   MySecondaryEIPAssociation:
     Type: AWS::EC2::EIPAssociation
+    DependsOn: MyEC2Instance
     Properties:
       AllocationId: !GetAtt MySecondaryEIP.AllocationId
       NetworkInterfaceId: !Ref MyENI

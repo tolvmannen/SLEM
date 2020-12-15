@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import subprocess
 import yaml
 from fpdf import FPDF
@@ -8,6 +9,12 @@ import argparse
 Script creating information tabels for every AWS environment
 and an additional information sheet containing information tabels about every AWS environment for admin user
 """
+
+def reformat(info):
+    repchar = ["\n","\t","\r","\\n","\\t","\\r"]
+    for ch in repchar:
+        info = info.replace(ch,"---")
+    return info
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='information', description='Get information from an AWS environment based on a parameter YAML-file')
@@ -47,10 +54,12 @@ if __name__ == "__main__":
             #get name, private Ipv4 address, public Ipv4 address and Ipv6 address of the current server in the loop
             server_info = subprocess.check_output("aws ec2 describe-instances --filter Name=tag:Name,Values="+params["GroupName"]+"-"+server+" Name=instance-state-code,Values=16 --query \"Reservations[].Instances[].[Tags[?Key=='Role']|[0].Value,NetworkInterfaces[].PrivateIpAddresses[].PrivateIpAddress,NetworkInterfaces[].PrivateIpAddresses[0].Association[].PublicIp,NetworkInterfaces[].Ipv6Addresses]\" --output text", shell=True)
             server_info = str(server_info) #convert output to string type
-            server_info = server_info.strip("b\'\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
+            server_info = server_info.split("'")[1].strip("\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
             #split string into a list, containing name, private Ipv4 address, public Ipv4 address and Ipv6 address as seperate elements, at the separators "\t" and "\r\n"
-            server_info = server_info.replace("\\t", "\\r\\n")
-            server_info = server_info.split("\\r\\n")
+            server_info = reformat(server_info)
+            server_info = server_info.split("---")
+            #server_info = server_info.replace("\\t", "\\r\\n")
+            #server_info = server_info.split("\\n")
             #devide the list of information about the LANclient into multiple lists that represents a row in the information table, since LANclient has multiple privte Ipv4 and Ipv6 addresses
             if server == "LANclient":
                 for i in range(2, 6, 3):
@@ -64,12 +73,14 @@ if __name__ == "__main__":
                     LAN4.append(server_info.pop(i)) #move an element (firs loop: private Ipv4 address, second loop: Ipv6 address) from the original LANclient list to the list contaning the fouth row of the LANclient
             #replace privte Ipv4 address od DNSslave with empty string
             if server == "DNSslave":
-                server_info[1] = ""
+                pass
+                #print(server_info)
+                #server_info[1] = ""
 
             #get public Ipv4 address of proxy server
             PublicIp = subprocess.check_output("aws ec2 describe-instances --filter Name=tag:Name,Values="+params["GroupName"]+"-proxy"+" Name=instance-state-code,Values=16 --query \"Reservations[].Instances[].[NetworkInterfaces[].PrivateIpAddresses[0].Association[].PublicIp]\" --output text", shell=True)
             PublicIp = str(PublicIp) #convert output to string type
-            PublicIp = PublicIp.strip("b\'\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
+            PublicIp = PublicIp.split("'")[1].strip("\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
             #insert public Ipv4 address of proxy server in the lists of information about the jumpgate, mailserver, webbserver and DNSmaster
             if server != "DNSslave" and server != "LANclient" and server != "resolver":
                 server_info.insert(2, PublicIp)
@@ -121,10 +132,12 @@ if __name__ == "__main__":
             #get name, private Ipv4 address, public Ipv4 address and Ipv6 address of the current server in the loop
             server_info = subprocess.check_output("aws ec2 describe-instances --filter Name=tag:Name,Values="+params["GroupName"]+"-"+server+" Name=instance-state-code,Values=16 --query \"Reservations[].Instances[].[Tags[?Key=='Role']|[0].Value,NetworkInterfaces[].PrivateIpAddresses[].PrivateIpAddress,NetworkInterfaces[].PrivateIpAddresses[0].Association[].PublicIp,NetworkInterfaces[].Ipv6Addresses]\" --output text", shell=True)
             server_info = str(server_info) #convert output to string type
-            server_info = server_info.strip("b\'\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
+            server_info = server_info.split("'")[1].strip("\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
             #split string into a list, containing name, private Ipv4 address, public Ipv4 address and Ipv6 address as seperate elements, at the separators "\t" and "\r\n"
-            server_info = server_info.replace("\\t", "\\r\\n")
-            server_info = server_info.split("\\r\\n")
+            server_info = reformat(server_info)
+            server_info = server_info.split("---")
+            #server_info = server_info.replace("\\t", "\\r\\n")
+            #server_info = server_info.split("\\r\\n")
             #devide the list of information about the LANclient into multiple lists that represents a row in the information table, since LANclient has multiple privte Ipv4 and Ipv6 addresses
             if server == "LANclient":
                 for i in range(2, 6, 3):
@@ -136,13 +149,13 @@ if __name__ == "__main__":
                 for i in range(2, 4, 1):
                     LAN4.append("")
                     LAN4.append(server_info.pop(i)) #move an element (firs loop: private Ipv4 address, second loop: Ipv6 address) from the original LANclient list to the list contaning the fouth row of the LANclient
-            #replace privte Ipv4 address od DNSslave with empty string
+            #replace privte Ipv4 address in DNSslave with empty string
             if server == "DNSslave":
                 server_info[1] = ""
             #get public Ipv4 address of proxy server
             PublicIp = subprocess.check_output("aws ec2 describe-instances --filter Name=tag:Name,Values="+params["GroupName"]+"-proxy"+" Name=instance-state-code,Values=16 --query \"Reservations[].Instances[].[NetworkInterfaces[].PrivateIpAddresses[0].Association[].PublicIp]\" --output text", shell=True)
             PublicIp = str(PublicIp) #convert output to string type
-            PublicIp = PublicIp.strip("b\'\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
+            PublicIp = PublicIp.split("'")[1].strip("\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
             #insert public Ipv4 address of proxy server in the lists of information about the jumpgate, mailserver, webbserver and DNSmaster
             if server != "DNSslave" and server != "LANclient" and server != "resolver":
                 server_info.insert(2, PublicIp)
@@ -152,8 +165,8 @@ if __name__ == "__main__":
             info.append(server_info) #append the list of information about the current server in the loop
         #get public ILO Ipv4 address of proxy server
         ProxyILOIp = subprocess.check_output("aws ec2 describe-instances --filter Name=tag:Name,Values="+params["GroupName"]+"-proxy"+" Name=instance-state-code,Values=16 --query \"Reservations[].Instances[].[NetworkInterfaces[].PrivateIpAddresses[1].Association[].PublicIp]\" --output text", shell=True)
-        ProxyILOIp = str(PublicIp) #convert output to string type
-        ProxyILOIp = PublicIp.strip("b\'\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
+        ProxyILOIp = str(ProxyILOIp) #convert output to string type
+        ProxyILOIp = ProxyILOIp.split("'")[1].strip("\\r\\n") #strip string of unnecessary characters at the beginning and end of the string
         ProxyILO = ["Proxy ILO", "", ProxyILOIp, ""] #create list for the last row in the informationtable, containing the ILO address of the proxy server
         #append the lists containg the second, third and fouth row of the LANclient information, and the list containing the ILO address of the proxy server to the end of the "info" list
         info.append(LAN2)
