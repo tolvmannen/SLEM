@@ -128,34 +128,13 @@ def DNSslave(params):
     print("Deleting "+StackName)
     args = ["aws", "cloudformation", "delete-stack", "--stack-name", StackName]
     subprocess.run(args)
+    slavesLeft = len(str(subprocess.check_output("aws ec2 describe-instances --filter Name=tag:Role,Values=DNSslave Name=instance-state-name,Values=running --query Reservations[].Instances[].InstanceId --output text", shell=True)).split("'")[1].strip("\\r\\n"))
+    if slavesLeft < 1:
+        VPCSlaveDNS()
+        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", "VPCSlaveDNS"])
 
-def deleteAll(paramlist):
-    for params in paramlist:
-        DNSslave(params)
-        mailserver(params)
-        webbserver(params)
-        DNSmaster(params)
-        LANclient(params)
-        jumpgate(params)
-        resolver(params)
-        proxy(params)
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-DNSslave"])
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-mailserver"])
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-webbserver"])
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-DNSmaster"])
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-LANclient"])
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-jumpgate"])
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-resolver"])
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-proxy"])
-        securityGroups(params)
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-SG"])
-        VPC(params)
-        subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-VPC"])
-    VPCSlaveDNS()
-    subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", "VPCSlaveDNS"])
 
-def deleteOne(params):
-    DNSslave(params)
+def deleteEnvironment(params):
     mailserver(params)
     webbserver(params)
     DNSmaster(params)
@@ -163,6 +142,7 @@ def deleteOne(params):
     jumpgate(params)
     resolver(params)
     proxy(params)
+    DNSslave(params)
     subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-DNSslave"])
     subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-mailserver"])
     subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-webbserver"])
@@ -175,6 +155,8 @@ def deleteOne(params):
     subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-SG"])
     VPC(params)
     subprocess.run(["aws", "cloudformation", "wait", "stack-delete-complete", "--stack-name", params["GroupName"]+"-VPC"])
+    
+
 
 
 if __name__ == "__main__":
@@ -200,10 +182,11 @@ if __name__ == "__main__":
     """
     choice = int(input(str(choice_msg)) or 1)
     if choice == 1:
-        deleteAll(paramlist)
+        for params in paramlist:
+            deleteEnvironment(params)
     elif choice == 2:
         group_nr = int(input("Which group?"))
-        deleteOne(paramlist[group_nr-1])
+        deleteEnvironment(paramlist[group_nr-1])
     elif choice == 3:
         group_nr = int(input("Which group?"))
         sc_msg = """

@@ -57,6 +57,10 @@ def check_keys(expected, path_keydir):
         return True
 
 
+def get_byoip_info()
+    args = ["aws", "ec2", "describe-public-ipv4-pools", "--query", "PublicIpv4Pools[].PoolId"]
+    ipv4id = subprocess.run(args)
+
 if __name__ == "__main__":
     default_domain = "examples.nu"
     domainlist = []
