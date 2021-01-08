@@ -84,7 +84,7 @@ Resources:
 
                         recursion yes;
 
-                        allow-recursion { 127.0.0.1; 10.0.55.0/24; 10.0.77.0/24; 10.0.99.0/24; };
+                        allow-recursion { 127.0.0.1; 10.0.55.0/24; 10.0.77.0/24; 10.0.99.0/24; ::1; };
 
                         querylog yes;
                 };
@@ -93,7 +93,7 @@ Resources:
             - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
             - echo ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
             - echo "ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAEkt7zuR9W8YVz3U0jl4LdR5F2KPL2GrHA/VkT65MeZicHzUtNdafCEUivRjVYmut3zUU70oY9wy1AaKE0sqp9XWAEEpyNeohTl2VwicV1iacKBMge5G8lveQN4UMC9KC4OnGTtu+8cWJAGWnnP/gvWDZCVZLzj6viZf/JBG0dm91fmkA==" >> /home/ubuntu/.ssh/authorized_keys
-            - sed -ie 's/^#DNSStubListener=yes/DNSStubListener=no/' resolved.conf
+            - sed -ie 's/^#DNSStubListener=yes/DNSStubListener=no/' /etc/systemd/resolved.conf
             - rm /etc/resolv.conf
             - echo 'nameserver 10.0.55.53' > /etc/resolv.conf
             - sed -ie '1s/^/10.0.55.53 ${HostName}\n/' /etc/hosts

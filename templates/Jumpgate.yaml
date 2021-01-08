@@ -84,13 +84,12 @@ Resources:
                 TDFzDW+55RuHXCHCW7++6Rt1K2Lef0w5Xd8sDXJ//haI+ubMeQACXp/iYPiQ1ownowAAAB
                 lqb25hcy5hbmRlcnNzb25ATE0zMzIubGFuAQ==
                 -----END OPENSSH PRIVATE KEY-----
-            - path: /etc/systemd/resolved.conf
-              content: |
-                [Resolve]
-                DNS=10.0.55.53
           runcmd:
             - hostnamectl set-hostname ${HostName}
-            - sed -i 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
+            - sed -ie 's/^#DNSStubListener=yes/DNSStubListener=no/' /etc/systemd/resolved.conf
+            - rm /etc/resolv.conf
+            - echo 'nameserver 10.0.55.53' > /etc/resolv.conf
+            - sed -ie 's/preserve_hostname:\ false/preserve_hostname:\ true/' /etc/cloud/cloud.cfg
             - echo ${StudentKey} >> /home/ubuntu/.ssh/authorized_keys
             - chown -R ubuntu:ubuntu /home/ubuntu/.ssh
             - systemctl restart systemd-resolved
