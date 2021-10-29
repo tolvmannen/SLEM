@@ -7,9 +7,22 @@ Parameters:
   Ipv6CidrBlock:
     Description: /56 cidr block of your own Ipv6 address pool, only fill this field if you chose to bring your own Ipv6 pool (2)
     Type: String
+
+  RouterInstanceId:
+    Description: An instance-id if AWS Hosted NAT-gateway shouldn't be used, ex i-xxxxxxxxxxx to route traffic from lan and dmz through when going outside VPC (towards internet.)
+    Type: String
+    Default: NONE
+
 Conditions:
   Ipv6PoolIsAmazon: !Equals [ !Ref Ipv6Pool, 1]
   Ipv6PoolIsBYOIP: !Equals [ !Ref Ipv6Pool, 2]
+
+  RouterInstanceIdSet: !Not
+    - Fn::Equals: ["NONE", !Ref RouterInstanceId]
+
+  UseNatGateway:
+    - Fn::Equals: ["NONE", !Ref RouterInstanceId]
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -90,6 +103,7 @@ Resources:
           Value: EIP
   NatGateway:
     Type: AWS::EC2::NatGateway
+    Condition: UseNatGateway
     Properties:
       AllocationId:
         Fn::GetAtt:
@@ -145,8 +159,16 @@ Resources:
       RouteTableId:
         Ref: PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: NatGateway
+      # If no instance-id configured in stack parameters, use natgateway
+      # else, route traffic through instance-id
+      NatGatewayId: !If
+        - UseNatGateway
+        - !Ref NatGateway
+        - !Ref AWS::NoValue
+      InstanceId: !If
+        - RouterInstanceIdSet
+        - !Ref RouterInstanceId
+        - !Ref AWS::NoValue
   PrivateIpv6Route:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
