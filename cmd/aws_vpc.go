@@ -31,8 +31,10 @@ var vpcCreateCMD = &cobra.Command{
 
 		// Create an EC2 service client.
 		svc := ec2.New(sess)
-		_, vpcId := CreateVpc(svc)
-		fmt.Printf("VPC created: %s\n", vpcId)
+		err, vpcId := CreateVpc(svc)
+		if err == nil {
+			fmt.Printf("VPC created: %s\n", vpcId)
+		}
 
 	},
 }
@@ -126,7 +128,8 @@ func CreateVpc(svc *ec2.EC2) (error, string) {
 	}
 
 	var id string
-	if result != nil {
+	//if result != nil {
+	if err == nil {
 		id = *result.Vpc.VpcId
 	}
 	if verbose {

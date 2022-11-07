@@ -196,7 +196,9 @@ func DeleteRT(svc *ec2.EC2, rtbId string) error {
 		}
 	}
 
-	fmt.Println(result)
+	if verbose {
+		fmt.Println(result)
+	}
 	return nil
 
 }
@@ -223,10 +225,12 @@ func AssociateRT(svc *ec2.EC2, rtbId, subnetId string) (error, string) {
 	}
 
 	var rtbassocId string
-	if result != nil {
+	if err == nil {
 		rtbassocId = *result.AssociationId
 	}
-	//fmt.Println(result)
+	if verbose {
+		fmt.Println(result)
+	}
 	return err, rtbassocId
 
 }
@@ -251,7 +255,9 @@ func DisassociateRT(svc *ec2.EC2, rtbassocId string) error {
 		}
 	}
 
-	fmt.Println(result)
+	if verbose {
+		fmt.Println(result)
+	}
 	return nil
 
 }
@@ -337,37 +343,6 @@ func ListRTB(svc *ec2.EC2) error {
 	}
 
 	return err
-}
-
-func GetRtbId(svc *ec2.EC2, rtbId string) string {
-
-	input := &ec2.DescribeRouteTablesInput{
-		RouteTableIds: []*string{
-			aws.String(rtbId),
-		},
-	}
-
-	result, err := svc.DescribeRouteTables(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	var id string
-	if len(result.RouteTables) > 0 {
-		id = *result.RouteTables[0].RouteTableId
-	}
-
-	fmt.Println(result)
-	return id
 }
 
 func init() {

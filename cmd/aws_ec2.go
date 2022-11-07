@@ -270,7 +270,7 @@ func ListEC2(svc *ec2.EC2) error {
 	}
 
 	//var iId, state, pubIp string
-	fmt.Printf("%-30s %-20s %-20s %-20s %s\n", "InstanceId", "State", "Public IP", "Public IPv6", "Tags")
+	fmt.Printf("%-20s %-20s %-30s %-20s %-30s %s\n", "Group name", "Public IP", "Public IPv6", "State", "InstanceId", "Tags")
 	for _, ec2inst := range result.Reservations {
 		iId := *ec2inst.Instances[0].InstanceId
 		state := *ec2inst.Instances[0].State.Name
@@ -284,12 +284,16 @@ func ListEC2(svc *ec2.EC2) error {
 
 		}
 		tags := ""
+		gName := ""
 		if ec2inst.Instances[0].Tags != nil {
 			for _, tv := range ec2inst.Instances[0].Tags {
 				tags += *tv.Key + " = " + *tv.Value + " | "
+				if *tv.Key == "Name" {
+					gName = *tv.Value
+				}
 			}
 		}
-		fmt.Printf("%-30s %-20s %-20s %-20s %s\n", iId, state, pubIp, pubIp6, tags)
+		fmt.Printf("%-20s %-20s %-30s %-20s %-30s %s\n", gName, pubIp, pubIp6, state, iId, tags)
 		//fmt.Printf("%T\n%+v\n-----------\n", ec2inst, ec2inst)
 		//fmt.Printf("%+v\n-----------\n", ec2inst.Instances[0].InstanceId)
 

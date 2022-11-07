@@ -35,10 +35,8 @@ var routeCreateCMD = &cobra.Command{
 
 		err = CreateRoute(svc, igwId, rtbId)
 
-		if err != nil {
-			fmt.Printf("Failed to create Toute Table, %v", err)
-		} else {
-			fmt.Printf("Added Rout to Route Table: %s\n", rtbId)
+		if err == nil {
+			fmt.Printf("Route added to Route Table: %s\n", rtbId)
 		}
 
 	},

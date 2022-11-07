@@ -199,8 +199,10 @@ func DeleteInternetGateway(svc *ec2.EC2, igwId string) error {
 		}
 	}
 
-	// result empty, but print anyway (for now)
-	fmt.Println(result)
+	if verbose {
+		// result empty, but print anyway
+		fmt.Println(result)
+	}
 	return err
 
 }
@@ -257,8 +259,10 @@ func DetatchInternetGateway(svc *ec2.EC2, igwId, vpcId string) error {
 		}
 	}
 
-	// result empty, but print anyway (for now)
-	fmt.Println(result)
+	if verbose {
+		// result empty, but print anyway
+		fmt.Println(result)
+	}
 	return err
 
 }
@@ -337,35 +341,6 @@ func DescribeInternetGateway(svc *ec2.EC2, igwId string) error {
 
 	fmt.Printf("%v", result)
 	return err
-}
-
-func GetIgwId(svc *ec2.EC2, igwId string) string {
-
-	input := &ec2.DescribeInternetGatewaysInput{
-		InternetGatewayIds: []*string{
-			aws.String(igwId),
-		},
-	}
-
-	result, err := svc.DescribeInternetGateways(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	var id string
-	if len(result.InternetGateways) > 0 {
-		id = *result.InternetGateways[0].InternetGatewayId
-	}
-	return id
 }
 
 func init() {

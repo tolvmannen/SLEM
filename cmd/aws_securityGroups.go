@@ -34,13 +34,11 @@ var sgCreateCMD = &cobra.Command{
 		svc := ec2.New(sess)
 
 		err, sgId := CreateSG(svc, vpcId)
-		if err != nil {
-			fmt.Printf("Failed to create Security Group, %v", err)
-		} else {
+		if err == nil {
 			fmt.Printf("SG created: %s\n", sgId)
 			err = AddIngressRulesLAN(svc, sgId)
-			if err != nil {
-				fmt.Printf("Failed to Add Ingress Rules, %v", err)
+			if err == nil {
+				fmt.Printf("Ingress Rules added to Security Group %s\n", err)
 			}
 		}
 

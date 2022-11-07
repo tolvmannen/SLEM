@@ -34,9 +34,7 @@ var subnetCreateCMD = &cobra.Command{
 		svc := ec2.New(sess)
 
 		err, subnetId := CreateSubnet(svc, vpcId)
-		if err != nil {
-			fmt.Printf("Failed to create Subnet, %v", err)
-		} else {
+		if err == nil {
 			fmt.Printf("Subnet created: %s\n", subnetId)
 		}
 
@@ -100,7 +98,7 @@ var subnetListCMD = &cobra.Command{
 func CreateSubnet(svc *ec2.EC2, vpcId string) (error, string) {
 
 	input := &ec2.CreateSubnetInput{
-		Ipv6CidrBlock: aws.String("2a10:ba00:bee5:0000::/64"),
+		Ipv6CidrBlock: aws.String("2a10:ba00:bee5::/64"),
 		CidrBlock:     aws.String("172.24.0.0/24"),
 		VpcId:         aws.String(vpcId),
 		TagSpecifications: []*ec2.TagSpecification{
@@ -130,9 +128,14 @@ func CreateSubnet(svc *ec2.EC2, vpcId string) (error, string) {
 		}
 	}
 
-	subnetId := *result.Subnet.SubnetId
+	subnetId := ""
+	if err == nil {
+		subnetId = *result.Subnet.SubnetId
+	}
 
-	//fmt.Println(result)
+	if verbose {
+		fmt.Println(result)
+	}
 	return err, subnetId
 
 }
@@ -157,7 +160,9 @@ func DeleteSubnet(svc *ec2.EC2, subnetId string) error {
 		}
 	}
 
-	fmt.Println(result)
+	if verbose {
+		fmt.Println(result)
+	}
 	return nil
 
 }
@@ -237,36 +242,6 @@ func ListSubnet(svc *ec2.EC2) error {
 	}
 
 	return err
-}
-
-func GetSubnetId(svc *ec2.EC2, subnetId string) string {
-	input := &ec2.DescribeSubnetsInput{
-		SubnetIds: []*string{
-			aws.String(subnetId),
-		},
-	}
-
-	result, err := svc.DescribeSubnets(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	var id string
-	if len(result.Subnets) > 0 {
-		id = *result.Subnets[0].SubnetId
-	}
-
-	//fmt.Println(result)
-	return id
 }
 
 func init() {
