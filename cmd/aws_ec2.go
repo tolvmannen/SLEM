@@ -33,7 +33,15 @@ var ec2CreateCMD = &cobra.Command{
 		// Create an EC2 service client.
 		svc := ec2.New(sess)
 
-		err, instanceId = CreateEC2(svc, sgId, subnetId)
+		// fix tags
+		tags := []*ec2.Tag{
+			{
+				Key:   aws.String(ProjTagKey),
+				Value: aws.String(ProjTagVal),
+			},
+		}
+
+		err, instanceId = CreateEC2(svc, sgId, subnetId, tags)
 		if err != nil {
 			fmt.Printf("Failed to create EC2 Instance, %v", err)
 		} else {
@@ -119,7 +127,7 @@ var ec2GetStateCMD = &cobra.Command{
 }
 
 //Run
-func CreateEC2(svc *ec2.EC2, sgId, subnetId string) (error, string) {
+func CreateEC2(svc *ec2.EC2, sgId, subnetId string, tags []*ec2.Tag) (error, string) {
 
 	input := &ec2.RunInstancesInput{
 		//ImageId:      aws.String("ami-08edbb0e85d6a0a07"),
@@ -128,7 +136,7 @@ func CreateEC2(svc *ec2.EC2, sgId, subnetId string) (error, string) {
 		KeyName:      aws.String("Jonas"),
 		Ipv6Addresses: []*ec2.InstanceIpv6Address{
 			{
-				Ipv6Address: aws.String("2a10:ba00:bee5::4"),
+				Ipv6Address: aws.String("2a10:ba00:bee5::8"),
 			},
 		},
 		MaxCount: aws.Int64(1),
@@ -140,12 +148,128 @@ func CreateEC2(svc *ec2.EC2, sgId, subnetId string) (error, string) {
 		TagSpecifications: []*ec2.TagSpecification{
 			{
 				ResourceType: aws.String("instance"),
-				Tags: []*ec2.Tag{
-					{
-						Key:   aws.String(ProjTagKey),
-						Value: aws.String(ProjTagVal),
+				Tags:         tags,
+				/*
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String(ProjTagKey),
+							Value: aws.String(ProjTagVal),
+						},
 					},
-				},
+				*/
+			},
+		},
+	}
+
+	result, err := svc.RunInstances(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	var instanceId string
+	if err == nil {
+		instanceId = *result.Instances[0].InstanceId
+	}
+	//instanceId := *result.Instances.InstanceId
+
+	if verbose {
+		fmt.Printf("%v\n", result)
+	}
+	//fmt.Printf("%T \n %#v", result, result)
+
+	return err, instanceId
+
+}
+
+func CreateByoipEC2(svc *ec2.EC2, sgId, subnetId string, tags []*ec2.Tag) (error, string) {
+
+	input := &ec2.RunInstancesInput{
+		//ImageId:      aws.String("ami-08edbb0e85d6a0a07"),
+		ImageId:      aws.String("ami-0358232eacf458589"),
+		InstanceType: aws.String("t3.micro"),
+		KeyName:      aws.String("Jonas"),
+		Ipv6Addresses: []*ec2.InstanceIpv6Address{
+			{
+				Ipv6Address: aws.String("2a10:ba00:bee5::8"),
+			},
+		},
+		MaxCount: aws.Int64(1),
+		MinCount: aws.Int64(1),
+		SecurityGroupIds: []*string{
+			aws.String(sgId),
+		},
+		SubnetId: aws.String(subnetId),
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("instance"),
+				Tags:         tags,
+				/*
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String(ProjTagKey),
+							Value: aws.String(ProjTagVal),
+						},
+					},
+				*/
+			},
+		},
+	}
+
+	result, err := svc.RunInstances(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	var instanceId string
+	if err == nil {
+		instanceId = *result.Instances[0].InstanceId
+	}
+	//instanceId := *result.Instances.InstanceId
+
+	if verbose {
+		fmt.Printf("%v\n", result)
+	}
+	//fmt.Printf("%T \n %#v", result, result)
+
+	return err, instanceId
+
+}
+
+func CreateAwsIpEC2(svc *ec2.EC2, sgId, subnetId string, tags []*ec2.Tag) (error, string) {
+
+	input := &ec2.RunInstancesInput{
+		ImageId:          aws.String("ami-0358232eacf458589"),
+		InstanceType:     aws.String("t3.micro"),
+		KeyName:          aws.String("Jonas"),
+		Ipv6AddressCount: aws.Int64(1),
+		MaxCount:         aws.Int64(1),
+		MinCount:         aws.Int64(1),
+		SecurityGroupIds: []*string{
+			aws.String(sgId),
+		},
+		SubnetId: aws.String(subnetId),
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("instance"),
+				Tags:         tags,
 			},
 		},
 	}

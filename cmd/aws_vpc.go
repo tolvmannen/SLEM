@@ -80,16 +80,20 @@ var vpcListCMD = &cobra.Command{
 	Short: "List VPC with current Project tags",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
+		/*
+			sess, err := CreateAwsSession()
 
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
+			if err != nil {
+				fmt.Printf("Session create error, %v", err)
+			}
+
+		*/
 
 		// Create an EC2 service client.
-		svc := ec2.New(sess)
 
-		_ = ListVpc(svc)
+		//svc := ec2.New(sess2)
+
+		_ = ListVpc(svc2)
 
 	},
 }
@@ -279,7 +283,47 @@ func ListVpc(svc *ec2.EC2) error {
 
 }
 
+func ProjectVpcExists(svc *ec2.EC2) bool {
+
+	input := &ec2.DescribeVpcsInput{
+		Filters: []*ec2.Filter{
+			&ec2.Filter{
+				Name: aws.String("tag:" + ProjTagKey),
+				Values: []*string{
+					aws.String(ProjTagVal),
+				},
+			},
+		},
+	}
+
+	//fmt.Printf("%s", input)
+
+	result, err := svc.DescribeVpcs(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	if result != nil {
+		return true
+	}
+
+	return false
+
+}
+
 func init() {
+
+	//sess2, _ = CreateAwsSession()
+
 	vpcCMD.AddCommand(vpcCreateCMD, vpcDeleteCMD, vpcDescribeCMD, vpcListCMD)
 	vpcDeleteCMD.Flags().StringVarP(&vpcId, "vpc-id", "", "", "VPC ID")
 	vpcDescribeCMD.Flags().StringVarP(&vpcId, "vpc-id", "", "", "VPC ID")

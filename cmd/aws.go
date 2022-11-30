@@ -26,7 +26,8 @@ var (
 	ipstart int
 	iprange int
 
-	conf string
+	awsconf string
+	labconf string
 
 	igwId      string
 	vpcId      string
@@ -44,31 +45,11 @@ var (
 	tagName    string
 	tagValue   string
 	resourceId string
+
+	sess2 *session.Session
+	svc2  *ec2.EC2
+	err   error
 )
-
-type Config struct {
-	Profile      string `yaml:"Profile"`
-	Region       string `yaml:"Region"`
-	Keypair      string `yaml:"Keypair"`
-	Byoip4       string `yaml:"Byoip4"`
-	Byoip6       string `yaml:"Byoip6"`
-	ImageId      string `yaml:"ImageId"`
-	InstanceType string `yaml:"InstanceType"`
-}
-
-func LoadConf(inFile string) (Config, error) {
-
-	yamlFile, err := ioutil.ReadFile(inFile)
-	var ret Config
-	if err != nil {
-		log.Printf("yamlFile.Get err   #%v ", err)
-	}
-	err = yaml.Unmarshal(yamlFile, &ret)
-	if err != nil {
-		log.Fatalf("Unmarshal: %v", err)
-	}
-	return ret, nil
-}
 
 var awsCmd = &cobra.Command{
 	Use:   "aws",
@@ -76,6 +57,214 @@ var awsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("aws called")
 	},
+}
+
+var testCMD = &cobra.Command{
+	Use:   "test",
+	Short: "Test stuff",
+	Run: func(cmd *cobra.Command, args []string) {
+
+		SlemConf, _ := LoadSlemConf(awsconf)
+		fmt.Printf("SlemConf = %+v\n", SlemConf)
+
+		var tags []*ec2.Tag
+		tags = ApendTags(tags, SlemConf.Tags)
+
+		/*
+			extratags := []map[string]string{
+				{
+					"Key":   "Test",
+					"Value": "Successful?",
+				},
+			}
+			tags = ApendTags(tags, extratags)
+		*/
+
+		//fmt.Printf("%T : %#v\n", tags, tags)
+		//inFile := "./config/test.yaml"
+
+		//SlemConf.LabGroups = LoadLabGroupConf(inFile)
+		//fmt.Printf("SlemConf = %+v\n", SlemConf)
+		/*
+			fmt.Printf("Creating VPC\n")
+			_, SlemConf.VpcId = ReturnThis("vpc-0f152cbe7449a4e37")
+			// _, vpcId = CreateVpc(svc, Tags)
+			fmt.Printf("Creating Internet Gateway\n")
+			_, SlemConf.IgwId = ReturnThis("igw-0f152cbe7449a4e99")
+			// _, igwId = CreateInternetGateway(svc, Tags)
+			fmt.Printf("Attaching Internet Gateway to VPC\n")
+			// _ = AttachInternetGateway(svc, igwId, vpcId)
+			fmt.Printf("Creating Subnet\n")
+			_, SlemConf.SubnetId = ReturnThis("subnet-0f152cbe77346s99")
+			// _, subnetId := CreateSubnet(svc, vpcId, byoip4, byoip6. Tags)
+			fmt.Printf("Creating Routing Table\n")
+			_, SlemConf.RtbId = ReturnThis("rtb-0f152cbe77346s77")
+			// _, rtbId = CreateRT(svc, vpcId, Tags)
+			fmt.Printf("Associating Routing Table with Subnet\n")
+			_, SlemConf.RtbassocId = ReturnThis("rtbassoc-0f152cbe7449a4e99")
+			// _, rtbassocId = AssociateRT(svc, rtbId, subnetId)
+			fmt.Printf("Creating IPv4 Route attached to IGW and Routnig Table\n")
+			// _ =  = CreateRoute(svc, igwId, rtbId)
+			fmt.Printf("Creating IPv6 Route attached to IGW and Routnig Table\n")
+			// _ = CreateRoute6(svc, igwId, rtbId)
+			fmt.Printf("Creating Security Group\n")
+			_, SlemConf.SgId = ReturnThis("sg-0f152cbe7449a4e37")
+			// err, sgId := CreateSG(svc, vpcId, Tags)
+			fmt.Printf("Adding Ingress Rules to Security Group\n")
+			// _ = AddIngressRulesLAN(svc, sgId)
+
+			fmt.Printf("\n=======================\n")
+			fmt.Printf("Ney SlemConf = %+v\n", SlemConf)
+		*/
+		//LabGroups := LoadLabGroupConf(inFile)
+		/*
+			for _, g := range LabGroups {
+				fmt.Printf("%+v\n", g)
+				for _, i := range g.Instances {
+					if i.ImageId == "" {
+						//fmt.Printf("using default AMI: %s\n", SlemConf.ImageId)
+						//fmt.Printf("using SPESHUL AMI: %s\n", i.ImageId)
+						i.ImageId = SlemConf.ImageId
+					}
+					//if i.ImageId == "" {
+					//}
+					fmt.Printf("using AMI: %s\n", i.ImageId)
+
+				}
+			}
+
+			// ----
+			sess, err := CreateAwsSession()
+
+			if err != nil {
+				fmt.Printf("Session create error, %v", err)
+			}
+
+			svc := ec2.New(sess)
+			if ProjectVpcExists(svc) {
+				fmt.Printf("\nVPC already exists!\n")
+			}
+		*/
+		// ---
+
+		//deyamlify(inFile)
+		//yamlify()
+	},
+}
+
+func DeployEnvironment(svc *ec2.EC2, Tags []*ec2.Tag) error {
+	fmt.Printf("Maybe make wrapper later...\n")
+	return nil
+}
+
+func DeployNetconf(svc *ec2.EC2, Tags []*ec2.Tag) error {
+
+	fmt.Printf("Creating VPC\n")
+	// _, vpcId = CreateVpc(svc, Tags)
+	fmt.Printf("Creating Internet Gateway\n")
+	// _, igwId = CreateInternetGateway(svc, Tags)
+	fmt.Printf("Attaching Internet Gateway to VPC\n")
+	// _ = AttachInternetGateway(svc, igwId, vpcId)
+	fmt.Printf("Creating Subnet\n")
+	// _, subnetId := CreateSubnet(svc, vpcId, byoip4, byoip6. Tags)
+	fmt.Printf("Creating Routing Table\n")
+	// _, rtbId = CreateRT(svc, vpcId, Tags)
+	fmt.Printf("Associating Routing Table with Subnet\n")
+	// _, rtbassocId = AssociateRT(svc, rtbId, subnetId)
+	fmt.Printf("Creating IPv4 Route attached to IGW and Routnig Table\n")
+	// _ =  = CreateRoute(svc, igwId, rtbId)
+	fmt.Printf("Creating IPv6 Route attached to IGW and Routnig Table\n")
+	// _ = CreateRoute6(svc, igwId, rtbId)
+	fmt.Printf("Creating Security Group\n")
+	// err, sgId := CreateSG(svc, vpcId, Tags)
+	fmt.Printf("Adding Ingress Rules to Security Group\n")
+	// _ = AddIngressRulesLAN(svc, sgId)
+
+	return nil
+
+}
+
+/*
+func yamlify() error {
+
+	a := LabGroup{
+		GroupName: "KTH01",
+		Domain:    "kth01.examples.nu",
+		Instances: []Instance{
+			{
+				Profile: "LAN",
+				IP4:     "45.155.99.8",
+				IP6:     "2a10:ba00:bee5::8",
+			},
+			{
+				Profile: "Secondary",
+				IP4:     "",
+				IP6:     "",
+			},
+		},
+	}
+	b := LabGroup{
+		GroupName: "KTH02",
+		Domain:    "kth02.examples.nu",
+		Instances: []Instance{
+			{
+				Profile: "LAN",
+				IP4:     "45.155.99.12",
+				IP6:     "2a10:ba00:bee5::12",
+			},
+			{
+				Profile: "Secondary",
+				IP4:     "",
+				IP6:     "",
+			},
+		},
+	}
+
+	in := []LabGroup{a, b}
+
+	out, _ := yaml.Marshal(&in)
+	fmt.Printf("\n%v\n", string(out))
+
+	return nil
+}
+
+func deyamlify(inFile string) {
+
+	yamlFile, err := ioutil.ReadFile(inFile)
+	var ret []LabGroup
+	if err != nil {
+		log.Printf("yamlFile.Get err   #%v ", err)
+	}
+	err = yaml.Unmarshal(yamlFile, &ret)
+	if err != nil {
+		log.Fatalf("Unmarshal: %v", err)
+	}
+
+	fmt.Printf("\n%+v\n", ret)
+	for _, group := range ret {
+		fmt.Printf("%s\n", group.GroupName)
+		for _, i := range group.Instances {
+			fmt.Printf("start an EC2 with profile %s\n", i.Profile)
+		}
+	}
+
+}
+
+*/
+func LoadLabGroupConf(inFile string) []LabGroup {
+
+	yamlFile, err := ioutil.ReadFile(inFile)
+	var ret []LabGroup
+	if err != nil {
+		log.Printf("yamlFile.Get err   #%v ", err)
+	}
+	err = yaml.Unmarshal(yamlFile, &ret)
+	if err != nil {
+		log.Fatalf("Unmarshal: %v", err)
+	}
+
+	return ret
+
 }
 
 var addtagCMD = &cobra.Command{
@@ -146,6 +335,31 @@ func CreateAwsSession() (*session.Session, error) {
 	})
 
 	return sess, err
+
+}
+
+//func CreateAwsSession2() (*session.Session, error) {
+func CreateAwsSession2(c SlemConfig) (*ec2.EC2, error) {
+
+	// Initialize a session in <region> that the SDK will use to load
+	// credentials from the shared credentials file ~/.aws/credentials.
+
+	sess, err := session.NewSessionWithOptions(session.Options{
+		// Specify profile to load for the session's config
+		Profile: c.AWSProfile,
+
+		// Provide SDK Config options, such as Region.
+		Config: aws.Config{
+			Region: aws.String(c.AWSRegion),
+		},
+
+		// Force enable Shared Config support
+		SharedConfigState: session.SharedConfigEnable,
+	})
+
+	svc := ec2.New(sess)
+
+	return svc, err
 
 }
 
@@ -244,18 +458,22 @@ var deployCMD = &cobra.Command{
 	Short: "Deploy environment described i YAML file for course ",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		fmt.Printf("Allocating Addresses\n")
-		fmt.Printf("Creating VPC\n")
-		fmt.Printf("Creating Internet Gateway\n")
-		fmt.Printf("Attaching Internet Gateway to VPC\n")
-		fmt.Printf("Creating Subnet\n")
-		fmt.Printf("Creating Routing Table\n")
-		fmt.Printf("Associating Routing Table with Subnet\n")
-		fmt.Printf("Creating Route attached to IGW and Routnig Table\n")
-		fmt.Printf("Creating Security Group\n")
-		fmt.Printf("Creating EC2 Instances\n")
+		SlemConf, _ := LoadSlemConf(awsconf)
+		fmt.Printf("SlemConf = %+v\n", SlemConf)
 
-		fmt.Printf("Associating Addresses to EC2 Instances\n")
+		var tags []*ec2.Tag
+		tags = ApendTags(tags, SlemConf.Tags)
+
+		sess, err := CreateAwsSession()
+
+		if err != nil {
+			fmt.Printf("Session create error, %v", err)
+		}
+
+		// Create an EC2 service client.
+		svc := ec2.New(sess)
+
+		_ = DeployEnvironment(svc, tags)
 
 	},
 }
@@ -387,12 +605,15 @@ func PrintBar(header, pattern string, length int) {
 }
 
 func init() {
+
 	rootCmd.AddCommand(awsCmd)
 	awsCmd.AddCommand(
 		ipcalcCMD, statusCMD, validateCMD, deployCMD, destroyCMD, addtagCMD, untagCMD,
-		vpcCMD, igwCMD, sgCMD, rtbCMD, routeCMD, route6CMD, subnetCMD, ec2CMD, eipCMD)
+		vpcCMD, igwCMD, sgCMD, rtbCMD, routeCMD, route6CMD, subnetCMD, ec2CMD, eipCMD, testCMD)
 
-	deployCMD.Flags().StringVarP(&conf, "--conf", "c", "./config/default.yaml", "Configuration parameters for the SLEM envirinment")
+	// BUG: cannot update awsconf for some reason. Flag always at default.
+	awsCmd.PersistentFlags().StringVarP(&awsconf, "awsconf", "", "./config/awsconf.yaml", "Basic configuration parameters for the SLEM AWS envirinment")
+	deployCMD.Flags().StringVarP(&labconf, "conf", "c", "./config/labconf.yaml", "Parameters for the LAB Environments")
 	addtagCMD.Flags().StringVarP(&resourceId, "resource-id", "r", "", "ID of resource to tag")
 	addtagCMD.Flags().StringVarP(&tagName, "name", "", "", "Tag name (Key)")
 	addtagCMD.Flags().StringVarP(&tagValue, "value", "", "", "Tag value (Value)")
@@ -412,5 +633,8 @@ func init() {
 	//ipcalc.Flags().StringVarP(&cidr, "cidr", "c", "/30", "Size of IP block")
 
 	//groupCmd.PersistentFlags().StringVarP(&gin.day, "day", "D", "", "Day in YYYY-MM-DD format")
+
+	SlemConf, _ := LoadSlemConf(awsconf)
+	svc2, err = CreateAwsSession2(SlemConf)
 
 }

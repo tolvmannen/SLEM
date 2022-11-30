@@ -241,6 +241,7 @@ func DescribeAddress(svc *ec2.EC2, ip4 string) []*ec2.Address {
 	return ret
 }
 */
+
 func AllocateAddress(svc *ec2.EC2, ip4 string) (error, string) {
 	allocRes, err := svc.AllocateAddress(&ec2.AllocateAddressInput{
 		Domain:  aws.String("vpc"),

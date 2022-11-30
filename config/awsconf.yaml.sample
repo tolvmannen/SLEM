@@ -5,4 +5,5 @@ Byoip4: 45.155.99.0/24
 Byoip6: 2a10:ba00:bee5:0000:0000:0000:0000:0000/56
 ImageId: ami-08edbb0e85d6a0a07
 InstanceType: t3.micro
+ProjectName: DNS-course
 
