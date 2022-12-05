@@ -153,14 +153,21 @@ var testCMD = &cobra.Command{
 }
 
 func DeployEnvironment(svc *ec2.EC2, Tags []*ec2.Tag) error {
-	fmt.Printf("Maybe make wrapper later...\n")
+	//fmt.Printf("Maybe make wrapper later...\n")
+
+	DeployNetconf(svc, Tags)
+
 	return nil
 }
 
 func DeployNetconf(svc *ec2.EC2, Tags []*ec2.Tag) error {
 
 	fmt.Printf("Creating VPC\n")
-	// _, vpcId = CreateVpc(svc, Tags)
+	err, vpcId = CreateVpc(svc)
+	// err, vpcId = CreateVpc(svc, Tags)
+	if err != nil {
+		exitErrorf("VPC exists")
+	}
 	fmt.Printf("Creating Internet Gateway\n")
 	// _, igwId = CreateInternetGateway(svc, Tags)
 	fmt.Printf("Attaching Internet Gateway to VPC\n")
