@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/spf13/cobra"
 
@@ -24,19 +25,11 @@ var subnetCreateCMD = &cobra.Command{
 	Short: "Manually create Subnet",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
+		if e.VpcId == "" {
+			e.VpcId = vpcId
 		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-
-		err, subnetId := CreateSubnet(svc, vpcId)
-		if err == nil {
-			fmt.Printf("Subnet created: %s\n", subnetId)
-		}
+		e.CreateSubnet()
+		AddTag(e.SVC, e.SubnetId, "Project", e.Project)
 
 	},
 }
@@ -46,15 +39,7 @@ var subnetDeleteCMD = &cobra.Command{
 	Short: "Manually delete Subnet",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DeleteSubnet(svc, subnetId)
+		e.DeleteSubnet()
 
 	},
 }
@@ -64,15 +49,7 @@ var subnetDescribeCMD = &cobra.Command{
 	Short: "Describe Subnet",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DescribeSubnet(svc, subnetId)
+		e.DescribeSubnet(subnetId)
 
 	},
 }
@@ -82,39 +59,77 @@ var subnetListCMD = &cobra.Command{
 	Short: "List Subnets for Project",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = ListSubnet(svc)
+		e.ListSubnet()
 
 	},
 }
 
-func CreateSubnet(svc *ec2.EC2, vpcId string) (error, string) {
+// Bundling functions
+
+//func (e *Environment) GetSubnetId(svc *ec2.EC2) error {
+func (e *Environment) GetSubnetId() error {
+	input := &ec2.DescribeSubnetsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("tag:EnvTag"),
+				Values: []*string{
+					aws.String(e.EnvTag),
+				},
+			},
+		},
+	}
+
+	result, err := e.SVC.DescribeSubnets(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	for _, subs := range result.Subnets {
+		e.SubnetId = *subs.SubnetId
+	}
+
+	if len(result.Subnets) > 1 {
+		err = xsIdErr
+	} else if len(result.Subnets) < 1 {
+		err = noIdErr
+	}
+
+	return err
+
+}
+
+func (e *Environment) CreateSubnet() error {
+
+	// Make a /64 subnet from IPv6 Cidr
+	var re = regexp.MustCompile(`/\d*$`)
+	SubCidr := re.ReplaceAllString(e.Byoip6cidr, "/64")
 
 	input := &ec2.CreateSubnetInput{
-		Ipv6CidrBlock: aws.String("2a10:ba00:bee5::/64"),
+		//Ipv6CidrBlock: aws.String("2a10:ba00:bee5::/64"),
+		Ipv6CidrBlock: aws.String(SubCidr),
 		CidrBlock:     aws.String("172.24.0.0/24"),
-		VpcId:         aws.String(vpcId),
+		VpcId:         aws.String(e.VpcId),
 		TagSpecifications: []*ec2.TagSpecification{
 			{
 				ResourceType: aws.String("subnet"),
 				Tags: []*ec2.Tag{
 					{
-						Key:   aws.String(ProjTagKey),
-						Value: aws.String(ProjTagVal),
+						Key:   aws.String("EnvTag"),
+						Value: aws.String(e.EnvTag),
 					},
 				},
 			},
 		},
 	}
 
-	result, err := svc.CreateSubnet(input)
+	result, err := e.SVC.CreateSubnet(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -122,31 +137,30 @@ func CreateSubnet(svc *ec2.EC2, vpcId string) (error, string) {
 				fmt.Println(aerr.Error())
 			}
 		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
 			fmt.Println(err.Error())
 		}
 	}
 
-	subnetId := ""
 	if err == nil {
-		subnetId = *result.Subnet.SubnetId
+		e.SubnetId = *result.Subnet.SubnetId
 	}
 
 	if verbose {
 		fmt.Println(result)
 	}
-	return err, subnetId
+	return err
 
 }
 
-func DeleteSubnet(svc *ec2.EC2, subnetId string) error {
+//func (e *Environment) DeleteSubnet(subnetId string) error {
+func (e *Environment) DeleteSubnet() error {
 
 	input := &ec2.DeleteSubnetInput{
-		SubnetId: aws.String(subnetId),
+		SubnetId: aws.String(e.SubnetId),
+		//SubnetId: aws.String(subnetId),
 	}
 
-	result, err := svc.DeleteSubnet(input)
+	result, err := e.SVC.DeleteSubnet(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -167,44 +181,19 @@ func DeleteSubnet(svc *ec2.EC2, subnetId string) error {
 
 }
 
-func DescribeSubnet(svc *ec2.EC2, subnetId string) error {
-	input := &ec2.DescribeSubnetsInput{
-		SubnetIds: []*string{
-			aws.String(subnetId),
-		},
-	}
-
-	result, err := svc.DescribeSubnets(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	fmt.Println(result)
-	return nil
-}
-
-func ListSubnet(svc *ec2.EC2) error {
+func (e *Environment) ListSubnet() error {
 	input := &ec2.DescribeSubnetsInput{
 		Filters: []*ec2.Filter{
 			{
-				Name: aws.String("tag:" + ProjTagKey),
+				Name: aws.String("tag:Project"),
 				Values: []*string{
-					aws.String(ProjTagVal),
+					aws.String(e.Project),
 				},
 			},
 		},
 	}
 
-	result, err := svc.DescribeSubnets(input)
+	result, err := e.SVC.DescribeSubnets(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -212,8 +201,6 @@ func ListSubnet(svc *ec2.EC2) error {
 				fmt.Println(aerr.Error())
 			}
 		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
 			fmt.Println(err.Error())
 		}
 	}
@@ -241,6 +228,32 @@ func ListSubnet(svc *ec2.EC2) error {
 		fmt.Printf("%-30s %-30s %-30s %-30s %s\n", subnetId, vpcId, cidr, cidr6, tags)
 	}
 
+	return err
+}
+
+func (e *Environment) DescribeSubnet(subnetId string) error {
+	input := &ec2.DescribeSubnetsInput{
+		SubnetIds: []*string{
+			//aws.String(e.SubnetId),
+			aws.String(subnetId),
+		},
+	}
+
+	result, err := e.SVC.DescribeSubnets(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	fmt.Println(result)
 	return err
 }
 

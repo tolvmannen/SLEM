@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -398,39 +399,32 @@ func ListEC2(svc *ec2.EC2) error {
 	for _, ec2inst := range result.Reservations {
 		iId := *ec2inst.Instances[0].InstanceId
 		state := *ec2inst.Instances[0].State.Name
-		pubIp := ""
-		if ec2inst.Instances[0].PublicIpAddress != nil {
-			pubIp = *ec2inst.Instances[0].PublicIpAddress
-		}
-		pubIp6 := ""
-		if ec2inst.Instances[0].Ipv6Address != nil {
-			pubIp6 = *ec2inst.Instances[0].Ipv6Address
 
-		}
-		tags := ""
-		gName := ""
-		if ec2inst.Instances[0].Tags != nil {
-			for _, tv := range ec2inst.Instances[0].Tags {
-				tags += *tv.Key + " = " + *tv.Value + " | "
-				if *tv.Key == "Name" {
-					gName = *tv.Value
+		if verbose || state != "terminated" {
+
+			pubIp := ""
+			if ec2inst.Instances[0].PublicIpAddress != nil {
+				pubIp = *ec2inst.Instances[0].PublicIpAddress
+			}
+			pubIp6 := ""
+			if ec2inst.Instances[0].Ipv6Address != nil {
+				pubIp6 = *ec2inst.Instances[0].Ipv6Address
+
+			}
+			tags := ""
+			gName := ""
+			if ec2inst.Instances[0].Tags != nil {
+				for _, tv := range ec2inst.Instances[0].Tags {
+					tags += *tv.Key + " = " + *tv.Value + " | "
+					if *tv.Key == "Name" {
+						gName = *tv.Value
+					}
 				}
 			}
+			fmt.Printf("%-20s %-20s %-30s %-20s %-30s %s\n", gName, pubIp, pubIp6, state, iId, tags)
 		}
-		fmt.Printf("%-20s %-20s %-30s %-20s %-30s %s\n", gName, pubIp, pubIp6, state, iId, tags)
-		//fmt.Printf("%T\n%+v\n-----------\n", ec2inst, ec2inst)
-		//fmt.Printf("%+v\n-----------\n", ec2inst.Instances[0].InstanceId)
 
 	}
-	/*
-		fmt.Println(result)
-		var id, state string
-		if len(result.Reservations) > 0 {
-			id = *result.Reservations[0].Instances[0].InstanceId
-			state = *result.Reservations[0].Instances[0].State.Name
-		}
-		fmt.Printf("\nInstande ID: %s\nState: %s\n", id, state)
-	*/
 
 	return nil
 }
@@ -494,6 +488,155 @@ func GetInstanceState(svc *ec2.EC2, instanceId string) string {
 	//fmt.Printf("\nInstande ID: %s\nState: %s\n", instanceId, state)
 
 	return state
+}
+
+// New Stuff
+
+func (e *Environment) MakeTestEC2(i *Ec2Instance) error {
+	var err error
+	if i.IP4 != "45.155.99.4" {
+		i.InstanceID = "i-AAA---" + e.VpcId
+	} else {
+		err = errors.New("whoops")
+	}
+
+	return err
+}
+
+func (e *Environment) CreateByoipEC2(i *Ec2Instance) error {
+
+	input := &ec2.RunInstancesInput{
+		//ImageId:      aws.String("ami-0358232eacf458589"),
+		ImageId:      aws.String(e.ImageId),
+		InstanceType: aws.String(e.InstanceType),
+		KeyName:      aws.String(e.AWSKeypair),
+		Ipv6Addresses: []*ec2.InstanceIpv6Address{
+			{
+				//Ipv6Address: aws.String("2a10:ba00:bee5::8"),
+				Ipv6Address: aws.String(i.IP6),
+			},
+		},
+		MaxCount: aws.Int64(1),
+		MinCount: aws.Int64(1),
+		SecurityGroupIds: []*string{
+			aws.String(e.SgId),
+		},
+		SubnetId: aws.String(e.SubnetId),
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("instance"),
+				//Tags:         tags,
+				Tags: []*ec2.Tag{
+					{
+						Key:   aws.String("Project"),
+						Value: aws.String(e.Project),
+					},
+					{
+						Key:   aws.String("EnvTag"),
+						Value: aws.String(e.EnvTag),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := e.SVC.RunInstances(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	//var instanceId string
+	if err == nil {
+		//instanceId = *result.Instances[0].InstanceId
+		i.InstanceID = *result.Instances[0].InstanceId
+		//fmt.Printf("- %s (%T) -\n", i.InstanceID, i.InstanceID)
+	}
+
+	if verbose {
+		fmt.Printf("%v\n", result)
+	}
+	//fmt.Printf("%T \n %#v", result, result)
+
+	return err
+
+}
+
+func (e *Environment) Ec2List() []string {
+
+	input := &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("tag:EnvTag"),
+				Values: []*string{
+					aws.String(e.EnvTag),
+				},
+			},
+		},
+	}
+
+	result, err := e.SVC.DescribeInstances(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	var Ec2List []string
+	for _, ec2inst := range result.Reservations {
+		/*
+			fmt.Printf("found %s %s\n",
+				*ec2inst.Instances[0].InstanceId, *ec2inst.Instances[0].State.Name)
+		*/
+		if *ec2inst.Instances[0].State.Name != "terminated" {
+			Ec2List = append(Ec2List, *ec2inst.Instances[0].InstanceId)
+		}
+
+	}
+
+	return Ec2List
+}
+
+func (e *Environment) DeleteEC2(instanceId string) error {
+
+	input := &ec2.TerminateInstancesInput{
+		InstanceIds: []*string{
+			aws.String(instanceId),
+		},
+	}
+
+	result, err := e.SVC.TerminateInstances(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	if verbose {
+		fmt.Println(result)
+	}
+	return err
+
 }
 
 func init() {

@@ -23,18 +23,8 @@ var vpcCreateCMD = &cobra.Command{
 	Short: "Manually create  VPC",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		err, vpcId := CreateVpc(svc)
-		if err == nil {
-			fmt.Printf("VPC created: %s\n", vpcId)
-		}
+		e.CreateByoipVpc()
+		AddTag(e.SVC, e.VpcId, "Project", e.Project)
 
 	},
 }
@@ -44,15 +34,7 @@ var vpcDeleteCMD = &cobra.Command{
 	Short: "Manually delete VPC",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DeleteVpc(svc, vpcId)
+		e.DeleteVpc()
 
 	},
 }
@@ -62,16 +44,7 @@ var vpcDescribeCMD = &cobra.Command{
 	Short: "Describe VPC",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DescribeVpc(svc, vpcId)
-
+		e.DescribeVpc(vpcId)
 	},
 }
 
@@ -80,44 +53,103 @@ var vpcListCMD = &cobra.Command{
 	Short: "List VPC with current Project tags",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		/*
-			sess, err := CreateAwsSession()
-
-			if err != nil {
-				fmt.Printf("Session create error, %v", err)
-			}
-
-		*/
-
-		// Create an EC2 service client.
-
-		//svc := ec2.New(sess2)
-
-		_ = ListVpc(svc2)
+		e.ListVpc()
 
 	},
 }
 
-func CreateVpc(svc *ec2.EC2) (error, string) {
+// Bundling functions
+
+func (e *Environment) GetVpcId() error {
+	input := &ec2.DescribeVpcsInput{
+		Filters: []*ec2.Filter{
+			&ec2.Filter{
+				Name: aws.String("tag:EnvTag"),
+				Values: []*string{
+					aws.String(e.EnvTag),
+				},
+			},
+		},
+	}
+
+	result, err := e.SVC.DescribeVpcs(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	for _, vpcs := range result.Vpcs {
+		//c.Environment[0].VpcId = *vpcs.VpcId
+		e.VpcId = *vpcs.VpcId
+	}
+
+	if len(result.Vpcs) > 1 {
+		err = xsIdErr
+	} else if len(result.Vpcs) < 1 {
+		err = noIdErr
+	}
+
+	return err
+}
+
+/*
+func (e *Environment) DescribeVpc(vpcId string) error {
+
+	input := &ec2.DescribeVpcsInput{
+		VpcIds: []*string{
+			aws.String(vpcId),
+		},
+	}
+
+	result, err := e.SVC.DescribeVpcs(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	fmt.Printf("%v", result)
+	return err
+
+}
+*/
+func (e *Environment) CreateByoipVpc() error {
 
 	input := &ec2.CreateVpcInput{
 		CidrBlock:     aws.String("172.24.0.0/16"),
-		Ipv6CidrBlock: aws.String("2a10:ba00:bee5:0000:0000:0000:0000:0000/56"),
-		Ipv6Pool:      aws.String("ipv6pool-ec2-0b40a8d4e1c7614d1"),
+		Ipv6CidrBlock: aws.String(e.Byoip6cidr),
+		Ipv6Pool:      aws.String(e.Byoip6pool),
+		//Ipv6CidrBlock: aws.String("2a10:ba00:bee5:0000:0000:0000:0000:0000/56"),
+		//Ipv6Pool:      aws.String("ipv6pool-ec2-0b40a8d4e1c7614d1"),
 		TagSpecifications: []*ec2.TagSpecification{
 			{
 				ResourceType: aws.String("vpc"),
 				Tags: []*ec2.Tag{
 					{
-						Key:   aws.String(ProjTagKey),
-						Value: aws.String(ProjTagVal),
+						Key:   aws.String("EnvTag"),
+						Value: aws.String(e.EnvTag),
 					},
 				},
 			},
 		},
 	}
 
-	result, err := svc.CreateVpc(input)
+	result, err := e.SVC.CreateVpc(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -131,53 +163,19 @@ func CreateVpc(svc *ec2.EC2) (error, string) {
 		}
 	}
 
-	var id string
-	//if result != nil {
 	if err == nil {
-		id = *result.Vpc.VpcId
+		//id = *result.Vpc.VpcId
+		e.VpcId = *result.Vpc.VpcId
 	}
 	if verbose {
 		fmt.Println(result)
 	}
-	return err, id
+
+	return err
 
 }
 
-func DeleteVpc(svc *ec2.EC2, vpcId string) error {
-
-	input := &ec2.DeleteVpcInput{
-		VpcId: aws.String(vpcId),
-	}
-
-	result, err := svc.DeleteVpc(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	fmt.Println(result)
-	return nil
-
-}
-
-func IsValidVpcId(svc *ec2.EC2, vpcId string) bool {
-	result := GetVpcId(svc, vpcId)
-	if len(result) > 0 {
-		return true
-	} else {
-		return false
-	}
-}
-
-func GetVpcId(svc *ec2.EC2, vpcId string) string {
+func (e *Environment) DescribeVpc(vpcId string) error {
 
 	input := &ec2.DescribeVpcsInput{
 		VpcIds: []*string{
@@ -185,40 +183,7 @@ func GetVpcId(svc *ec2.EC2, vpcId string) string {
 		},
 	}
 
-	result, err := svc.DescribeVpcs(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	//fmt.Printf("\nid Exists: %v\n", result.Vpcs[0].VpcId)
-
-	var id string
-	if len(result.Vpcs) > 0 {
-		id = *result.Vpcs[0].VpcId
-	}
-
-	return id
-
-}
-
-func DescribeVpc(svc *ec2.EC2, vpcId string) error {
-
-	input := &ec2.DescribeVpcsInput{
-		VpcIds: []*string{
-			aws.String(vpcId),
-		},
-	}
-
-	result, err := svc.DescribeVpcs(input)
+	result, err := e.SVC.DescribeVpcs(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -237,14 +202,14 @@ func DescribeVpc(svc *ec2.EC2, vpcId string) error {
 
 }
 
-func ListVpc(svc *ec2.EC2) error {
+func (e *Environment) ListVpc() error {
 
 	input := &ec2.DescribeVpcsInput{
 		Filters: []*ec2.Filter{
 			&ec2.Filter{
-				Name: aws.String("tag:" + ProjTagKey),
+				Name: aws.String("tag:Project"),
 				Values: []*string{
-					aws.String(ProjTagVal),
+					aws.String(e.Project),
 				},
 			},
 		},
@@ -252,7 +217,7 @@ func ListVpc(svc *ec2.EC2) error {
 
 	//fmt.Printf("%s", input)
 
-	result, err := svc.DescribeVpcs(input)
+	result, err := e.SVC.DescribeVpcs(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -283,22 +248,15 @@ func ListVpc(svc *ec2.EC2) error {
 
 }
 
-func ProjectVpcExists(svc *ec2.EC2) bool {
+//func (e *Environment) DeleteVpc(vpcId string) error {
+func (e *Environment) DeleteVpc() error {
 
-	input := &ec2.DescribeVpcsInput{
-		Filters: []*ec2.Filter{
-			&ec2.Filter{
-				Name: aws.String("tag:" + ProjTagKey),
-				Values: []*string{
-					aws.String(ProjTagVal),
-				},
-			},
-		},
+	input := &ec2.DeleteVpcInput{
+		//VpcId: aws.String(vpcId),
+		VpcId: aws.String(e.VpcId),
 	}
 
-	//fmt.Printf("%s", input)
-
-	result, err := svc.DescribeVpcs(input)
+	result, err := e.SVC.DeleteVpc(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -312,11 +270,8 @@ func ProjectVpcExists(svc *ec2.EC2) bool {
 		}
 	}
 
-	if result != nil {
-		return true
-	}
-
-	return false
+	fmt.Println(result)
+	return nil
 
 }
 

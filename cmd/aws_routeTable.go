@@ -24,21 +24,9 @@ var rtbCreateCMD = &cobra.Command{
 	Short: "Manually create Route Table",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-
-		err, rtbId := CreateRT(svc, vpcId)
-		if err != nil {
-			fmt.Printf("Failed to create Toute Table, %v", err)
-		} else {
-			fmt.Printf("RT created: %s\n", rtbId)
-		}
+		//cf.Environment.CreateRTB(cf.SVC)
+		e.CreateRTB()
+		AddTag(e.SVC, e.RtbId, "Project", e.Project)
 
 	},
 }
@@ -48,16 +36,10 @@ var rtbDeleteCMD = &cobra.Command{
 	Short: "Manually delete Route Table",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
+		if e.RtbId == "" {
+			e.RtbId = rtbId
 		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DeleteRT(svc, rtbId)
-
+		e.DeleteRTB()
 	},
 }
 
@@ -66,18 +48,13 @@ var rtbAssociateCMD = &cobra.Command{
 	Short: "Associate a Route Table to an Internet Gateway",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
+		if e.RtbId == "" {
+			e.RtbId = rtbId
 		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		err, rtbassocId = AssociateRT(svc, rtbId, subnetId)
-		if err == nil {
-			fmt.Printf("Route Table %s associated with Subnet %s : (%s)\n", rtbId, subnetId, rtbassocId)
+		if e.SubnetId == "" {
+			e.SubnetId = subnetId
 		}
+		e.AssociateRTB()
 
 	},
 }
@@ -87,15 +64,10 @@ var rtbDisassociateCMD = &cobra.Command{
 	Short: "Disassociate a Route Table from an Internet Gateway",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
+		if e.RtbassocId == "" {
+			e.RtbassocId = rtbassocId
 		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DisassociateRT(svc, rtbassocId)
+		e.DisassociateRTB()
 
 	},
 }
@@ -105,15 +77,7 @@ var rtbListCMD = &cobra.Command{
 	Short: "List Route Tables for Project",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = ListRTB(svc)
+		e.ListRTB()
 
 	},
 }
@@ -123,37 +87,72 @@ var rtbDescribeCMD = &cobra.Command{
 	Short: "Describe a Route Table",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DescribeRT(svc, rtbId)
+		e.DescribeRTB(rtbId)
 
 	},
 }
 
-func CreateRT(svc *ec2.EC2, vpcId string) (error, string) {
+// Bundling Functions
+
+func (e *Environment) GetRtbId() error {
+
+	input := &ec2.DescribeRouteTablesInput{
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("tag:EnvTag"),
+				Values: []*string{
+					aws.String(e.EnvTag),
+				},
+			},
+		},
+	}
+
+	result, err := e.SVC.DescribeRouteTables(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	for _, rtbs := range result.RouteTables {
+		e.RtbId = *rtbs.RouteTableId
+	}
+
+	if len(result.RouteTables) > 1 {
+		err = xsIdErr
+	} else if len(result.RouteTables) < 1 {
+		err = noIdErr
+	}
+
+	return err
+
+}
+
+func (e *Environment) CreateRTB() error {
 
 	input := &ec2.CreateRouteTableInput{
-		VpcId: aws.String(vpcId),
+		VpcId: aws.String(e.VpcId),
 		TagSpecifications: []*ec2.TagSpecification{
 			{
 				ResourceType: aws.String("route-table"),
 				Tags: []*ec2.Tag{
 					{
-						Key:   aws.String(ProjTagKey),
-						Value: aws.String(ProjTagVal),
+						Key:   aws.String("EnvTag"),
+						Value: aws.String(e.EnvTag),
 					},
 				},
 			},
 		},
 	}
 
-	result, err := svc.CreateRouteTable(input)
+	result, err := e.SVC.CreateRouteTable(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -161,148 +160,146 @@ func CreateRT(svc *ec2.EC2, vpcId string) (error, string) {
 				fmt.Println(aerr.Error())
 			}
 		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
 			fmt.Println(err.Error())
 		}
 	}
 
-	var rtbId string
 	if result != nil {
-		rtbId = *result.RouteTable.RouteTableId
+		e.RtbId = *result.RouteTable.RouteTableId
 	}
 
-	return err, rtbId
-
-}
-
-func DeleteRT(svc *ec2.EC2, rtbId string) error {
-
-	input := &ec2.DeleteRouteTableInput{
-		RouteTableId: aws.String(rtbId),
-	}
-
-	result, err := svc.DeleteRouteTable(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	if verbose {
-		fmt.Println(result)
-	}
-	return nil
-
-}
-
-func AssociateRT(svc *ec2.EC2, rtbId, subnetId string) (error, string) {
-
-	input := &ec2.AssociateRouteTableInput{
-		RouteTableId: aws.String(rtbId),
-		SubnetId:     aws.String(subnetId),
-	}
-
-	result, err := svc.AssociateRouteTable(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	var rtbassocId string
-	if err == nil {
-		rtbassocId = *result.AssociationId
-	}
-	if verbose {
-		fmt.Println(result)
-	}
-	return err, rtbassocId
-
-}
-
-func DisassociateRT(svc *ec2.EC2, rtbassocId string) error {
-
-	input := &ec2.DisassociateRouteTableInput{
-		AssociationId: aws.String(rtbassocId),
-	}
-
-	result, err := svc.DisassociateRouteTable(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	if verbose {
-		fmt.Println(result)
-	}
-	return nil
-
-}
-
-func DescribeRT(svc *ec2.EC2, rtbId string) error {
-
-	input := &ec2.DescribeRouteTablesInput{
-		RouteTableIds: []*string{
-			aws.String(rtbId),
-		},
-	}
-
-	result, err := svc.DescribeRouteTables(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	fmt.Println(result)
 	return err
 
 }
 
-func ListRTB(svc *ec2.EC2) error {
+func (e *Environment) GetRtbassocId() error {
+
+	input := &ec2.DescribeRouteTablesInput{
+		RouteTableIds: []*string{
+			aws.String(e.RtbId),
+		},
+	}
+
+	result, err := e.SVC.DescribeRouteTables(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	for _, rtbs := range result.RouteTables {
+		if rtbs.Associations != nil {
+			e.RtbassocId = *rtbs.Associations[0].RouteTableAssociationId
+			if len(rtbs.Associations) > 1 {
+				err = xsIdErr
+			}
+		} else {
+			err = noIdErr
+		}
+	}
+
+	return err
+
+}
+
+func (e *Environment) AssociateRTB() error {
+
+	input := &ec2.AssociateRouteTableInput{
+		RouteTableId: aws.String(e.RtbId),
+		SubnetId:     aws.String(e.SubnetId),
+	}
+
+	result, err := e.SVC.AssociateRouteTable(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	if err == nil {
+		e.RtbassocId = *result.AssociationId
+	}
+	if verbose {
+		fmt.Println(result)
+	}
+	return err
+
+}
+
+func (e *Environment) DisassociateRTB() error {
+
+	input := &ec2.DisassociateRouteTableInput{
+		AssociationId: aws.String(e.RtbassocId),
+	}
+
+	result, err := e.SVC.DisassociateRouteTable(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	if verbose {
+		fmt.Println(result)
+	}
+	return nil
+
+}
+
+func (e *Environment) DeleteRTB() error {
+
+	input := &ec2.DeleteRouteTableInput{
+		RouteTableId: aws.String(e.RtbId),
+	}
+
+	result, err := e.SVC.DeleteRouteTable(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	if verbose {
+		fmt.Println(result)
+	}
+	return err
+
+}
+
+func (e *Environment) ListRTB() error {
 
 	input := &ec2.DescribeRouteTablesInput{
 		Filters: []*ec2.Filter{
 			{
-				Name: aws.String("tag:" + ProjTagKey),
+				Name: aws.String("tag:Project"),
 				Values: []*string{
-					aws.String(ProjTagVal),
+					aws.String(e.Project),
 				},
 			},
 		},
 	}
 
-	result, err := svc.DescribeRouteTables(input)
+	result, err := e.SVC.DescribeRouteTables(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -310,8 +307,6 @@ func ListRTB(svc *ec2.EC2) error {
 				fmt.Println(aerr.Error())
 			}
 		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
 			fmt.Println(err.Error())
 		}
 	}
@@ -343,6 +338,33 @@ func ListRTB(svc *ec2.EC2) error {
 	}
 
 	return err
+}
+
+func (e *Environment) DescribeRTB(rtbId string) error {
+
+	input := &ec2.DescribeRouteTablesInput{
+		RouteTableIds: []*string{
+			aws.String(rtbId),
+		},
+	}
+
+	result, err := e.SVC.DescribeRouteTables(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	fmt.Println(result)
+	return err
+
 }
 
 func init() {

@@ -1,0 +1,19 @@
+Project: SLEM-LAB
+Type: BYOIP
+EnvTag: EC2-LAN
+AWSProfile: default
+AWSRegion: eu-west-1
+AWSKeypair: MyKeys
+Byoip4cidr: 55.44.33.22.0/24
+Byoip6cidr: 2b10:FF7:bee5::/56
+Byoip6pool: ipv6pool-ec2-0abacac00abacacd1
+ImageId: ami-08abab1a1ab4a0a07
+InstanceType: t3.micro
+StartIP: 4
+GroupIpSize: 4
+NrOfGroups: 2
+Tags:
+  - Key: Name1
+    Value: Value1
+  - Key: Name2
+    Value: Value2

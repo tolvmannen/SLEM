@@ -24,20 +24,16 @@ var route6CreateCMD = &cobra.Command{
 	Short: "Manually create IPv6 Route",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
+		if e.IgwId == "" {
+			e.IgwId = igwId
 		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-
-		err = CreateRoute6(svc, igwId, rtbId)
-
-		if err != nil {
-			fmt.Printf("Route added to Route Table: %s\n", rtbId)
+		if e.RtbId == "" {
+			e.RtbId = rtbId
 		}
+		e.CreateRoute6()
+		//if err == nil {
+		//	fmt.Printf("Route added to Route Table: %s\n", rtbId)
+		//}
 
 	},
 }
@@ -47,29 +43,23 @@ var route6DeleteCMD = &cobra.Command{
 	Short: "Manually delete IPv6 Route",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DeleteRoute6(svc, rtbId)
+		e.DeleteRoute6(rtbId)
 
 	},
 }
 
-func CreateRoute6(svc *ec2.EC2, igwId, rtbId string) error {
+// Bundling Ffunctions
+
+func (e *Environment) CreateRoute6() error {
 
 	input := &ec2.CreateRouteInput{
-		GatewayId:    aws.String(igwId),
-		RouteTableId: aws.String(rtbId),
+		GatewayId:    aws.String(e.IgwId),
+		RouteTableId: aws.String(e.RtbId),
 		//DestinationCidrBlock: aws.String("0.0.0.0/0"),
 		DestinationIpv6CidrBlock: aws.String("::/0"),
 	}
 
-	result, err := svc.CreateRoute(input)
+	result, err := e.SVC.CreateRoute(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -90,7 +80,7 @@ func CreateRoute6(svc *ec2.EC2, igwId, rtbId string) error {
 
 }
 
-func DeleteRoute6(svc *ec2.EC2, rtbId string) error {
+func (e *Environment) DeleteRoute6(rtbId string) error {
 
 	input := &ec2.DeleteRouteInput{
 		RouteTableId: aws.String(rtbId),
@@ -98,7 +88,7 @@ func DeleteRoute6(svc *ec2.EC2, rtbId string) error {
 		DestinationIpv6CidrBlock: aws.String("::/0"),
 	}
 
-	result, err := svc.DeleteRoute(input)
+	result, err := e.SVC.DeleteRoute(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {

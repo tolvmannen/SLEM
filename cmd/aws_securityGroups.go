@@ -24,23 +24,8 @@ var sgCreateCMD = &cobra.Command{
 	Short: "Manually create Security Group",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-
-		err, sgId := CreateSG(svc, vpcId)
-		if err == nil {
-			fmt.Printf("SG created: %s\n", sgId)
-			err = AddIngressRulesLAN(svc, sgId)
-			if err == nil {
-				fmt.Printf("Ingress Rules added to Security Group %s\n", err)
-			}
-		}
+		e.CreateSG()
+		e.AddIngressRules()
 
 	},
 }
@@ -50,16 +35,10 @@ var sgDeleteCMD = &cobra.Command{
 	Short: "Manually delete Security Group",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
+		if e.SgId == "" {
+			e.SgId = sgId
 		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DeleteSG(svc, sgId)
-
+		e.DeleteSG()
 	},
 }
 
@@ -68,15 +47,7 @@ var sgDescribeCMD = &cobra.Command{
 	Short: "Describe Security Group",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DescribeSG(svc, sgId)
+		e.DescribeSG(sgId)
 
 	},
 }
@@ -86,39 +57,75 @@ var sgListCMD = &cobra.Command{
 	Short: "List Security Groups by tags",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = ListSG(svc)
+		e.ListSG()
 
 	},
 }
 
-func CreateSG(svc *ec2.EC2, vpcId string) (error, string) {
+// Bundling functions
+
+//func (e *Environment) GetSgId(svc *ec2.EC2) error {
+func (e *Environment) GetSgId() error {
+
+	input := &ec2.DescribeSecurityGroupsInput{
+		Filters: []*ec2.Filter{
+			&ec2.Filter{
+				Name: aws.String("tag:EnvTag"),
+				Values: []*string{
+					aws.String(e.EnvTag),
+				},
+			},
+		},
+	}
+
+	result, err := e.SVC.DescribeSecurityGroups(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	for _, sgs := range result.SecurityGroups {
+		e.SgId = *sgs.GroupId
+	}
+
+	if len(result.SecurityGroups) < 1 {
+		err = noIdErr
+	} else if len(result.SecurityGroups) > 1 {
+		err = xsIdErr
+	}
+
+	return err
+
+}
+
+func (e *Environment) CreateSG() error {
 
 	input := &ec2.CreateSecurityGroupInput{
-		Description: aws.String("DNS-course LAN SG"),
-		GroupName:   aws.String("DNS-course-LAN-SG"),
-		VpcId:       aws.String(vpcId),
+		Description: aws.String(e.EnvTag + "-SG"),
+		GroupName:   aws.String(e.EnvTag + "-SG"),
+		VpcId:       aws.String(e.VpcId),
 		TagSpecifications: []*ec2.TagSpecification{
 			{
 				ResourceType: aws.String("security-group"),
 				Tags: []*ec2.Tag{
 					{
-						Key:   aws.String(ProjTagKey),
-						Value: aws.String(ProjTagVal),
+						Key:   aws.String("EnvTag"),
+						Value: aws.String(e.EnvTag),
 					},
 				},
 			},
 		},
 	}
 
-	result, err := svc.CreateSecurityGroup(input)
+	result, err := e.SVC.CreateSecurityGroup(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -132,25 +139,25 @@ func CreateSG(svc *ec2.EC2, vpcId string) (error, string) {
 		}
 	}
 
-	var gid string
 	if result.GroupId != nil {
-		gid = *result.GroupId
+		e.SgId = *result.GroupId
 	}
 
 	if verbose {
 		fmt.Println(result)
 	}
-	return err, gid
+	return err
 
 }
 
-func DeleteSG(svc *ec2.EC2, sgId string) error {
+func (e *Environment) AddIngressRules() error {
 
-	input := &ec2.DeleteSecurityGroupInput{
-		GroupId: aws.String(sgId),
+	input := &ec2.AuthorizeSecurityGroupIngressInput{
+		GroupId:       aws.String(e.SgId),
+		IpPermissions: EC2LanRules,
 	}
 
-	result, err := svc.DeleteSecurityGroup(input)
+	result, err := e.SVC.AuthorizeSecurityGroupIngress(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -164,12 +171,42 @@ func DeleteSG(svc *ec2.EC2, sgId string) error {
 		}
 	}
 
-	fmt.Println(result)
-	return nil
+	if verbose {
+		fmt.Printf("%v", result)
+	}
+	return err
 
 }
 
-func DescribeSG(svc *ec2.EC2, sgId string) error {
+func (e *Environment) DeleteSG() error {
+
+	input := &ec2.DeleteSecurityGroupInput{
+		GroupId: aws.String(e.SgId),
+		//GroupId: aws.String(sgId),
+	}
+
+	result, err := e.SVC.DeleteSecurityGroup(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+
+	if verbose {
+		fmt.Println(result)
+	}
+	return err
+
+}
+
+func (e *Environment) DescribeSG(sgId string) error {
 
 	input := &ec2.DescribeSecurityGroupsInput{
 		GroupIds: []*string{
@@ -177,7 +214,7 @@ func DescribeSG(svc *ec2.EC2, sgId string) error {
 		},
 	}
 
-	result, err := svc.DescribeSecurityGroups(input)
+	result, err := e.SVC.DescribeSecurityGroups(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -192,24 +229,24 @@ func DescribeSG(svc *ec2.EC2, sgId string) error {
 	}
 
 	fmt.Println(result)
-	return nil
+	return err
 
 }
 
-func ListSG(svc *ec2.EC2) error {
+func (e *Environment) ListSG() error {
 
 	input := &ec2.DescribeSecurityGroupsInput{
 		Filters: []*ec2.Filter{
 			&ec2.Filter{
-				Name: aws.String("tag:" + ProjTagKey),
+				Name: aws.String("tag:Project"),
 				Values: []*string{
-					aws.String(ProjTagVal),
+					aws.String(e.Project),
 				},
 			},
 		},
 	}
 
-	result, err := svc.DescribeSecurityGroups(input)
+	result, err := e.SVC.DescribeSecurityGroups(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -239,145 +276,6 @@ func ListSG(svc *ec2.EC2) error {
 	}
 
 	return nil
-
-}
-
-func AddIngressRulesLAN(svc *ec2.EC2, sgId string) error {
-
-	input := &ec2.AuthorizeSecurityGroupIngressInput{
-		GroupId: aws.String(sgId),
-		IpPermissions: []*ec2.IpPermission{
-			{
-				FromPort:   aws.Int64(22),
-				IpProtocol: aws.String("tcp"),
-				IpRanges: []*ec2.IpRange{
-					{
-						CidrIp:      aws.String("0.0.0.0/0"),
-						Description: aws.String("SSH access to Docker"),
-					},
-				},
-				ToPort: aws.Int64(22),
-			},
-			{
-				FromPort:   aws.Int64(22),
-				IpProtocol: aws.String("tcp"),
-				Ipv6Ranges: []*ec2.Ipv6Range{
-					{
-						CidrIpv6:    aws.String("::0/0"),
-						Description: aws.String("SSH to Docker IPv6"),
-					},
-				},
-				ToPort: aws.Int64(22),
-			},
-			{
-				FromPort:   aws.Int64(25),
-				IpProtocol: aws.String("tcp"),
-				IpRanges: []*ec2.IpRange{
-					{
-						CidrIp:      aws.String("0.0.0.0/0"),
-						Description: aws.String("SMTP access"),
-					},
-				},
-				ToPort: aws.Int64(25),
-			},
-			{
-				FromPort:   aws.Int64(53),
-				IpProtocol: aws.String("udp"),
-				IpRanges: []*ec2.IpRange{
-					{
-						CidrIp:      aws.String("0.0.0.0/0"),
-						Description: aws.String("DNS"),
-					},
-				},
-				ToPort: aws.Int64(53),
-			},
-			{
-				FromPort:   aws.Int64(53),
-				IpProtocol: aws.String("tcp"),
-				IpRanges: []*ec2.IpRange{
-					{
-						CidrIp:      aws.String("0.0.0.0/0"),
-						Description: aws.String("DNS"),
-					},
-				},
-				ToPort: aws.Int64(53),
-			},
-			{
-				FromPort:   aws.Int64(53),
-				IpProtocol: aws.String("udp"),
-				Ipv6Ranges: []*ec2.Ipv6Range{
-					{
-						CidrIpv6:    aws.String("::0/0"),
-						Description: aws.String("DNS IPv6"),
-					},
-				},
-				ToPort: aws.Int64(53),
-			},
-			{
-				FromPort:   aws.Int64(53),
-				IpProtocol: aws.String("tcp"),
-				Ipv6Ranges: []*ec2.Ipv6Range{
-					{
-						CidrIpv6:    aws.String("::0/0"),
-						Description: aws.String("DNS IPv6"),
-					},
-				},
-				ToPort: aws.Int64(53),
-			},
-			{
-				FromPort:   aws.Int64(80),
-				IpProtocol: aws.String("tcp"),
-				IpRanges: []*ec2.IpRange{
-					{
-						CidrIp:      aws.String("0.0.0.0/0"),
-						Description: aws.String("HTTP"),
-					},
-				},
-				ToPort: aws.Int64(80),
-			},
-			{
-				FromPort:   aws.Int64(80),
-				IpProtocol: aws.String("tcp"),
-				Ipv6Ranges: []*ec2.Ipv6Range{
-					{
-						CidrIpv6:    aws.String("::0/0"),
-						Description: aws.String("HTTP IPv6"),
-					},
-				},
-				ToPort: aws.Int64(80),
-			},
-			{
-				FromPort:   aws.Int64(2022),
-				IpProtocol: aws.String("tcp"),
-				IpRanges: []*ec2.IpRange{
-					{
-						CidrIp:      aws.String("0.0.0.0/0"),
-						Description: aws.String("SSH access to EC2"),
-					},
-				},
-				ToPort: aws.Int64(2022),
-			},
-		},
-	}
-
-	result, err := svc.AuthorizeSecurityGroupIngress(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-	}
-
-	if verbose {
-		fmt.Printf("%v", result)
-	}
-	return err
 
 }
 

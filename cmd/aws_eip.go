@@ -364,6 +364,151 @@ func PrintAddrInfo(v *ec2.Address) {
 	fmt.Printf("%-20s %-30s %-30s %s\n", pip, alid, asid, tags)
 }
 
+// New stuff
+
+func (i *Ec2Instance) AllocateAddress(svc *ec2.EC2) error {
+	allocRes, err := svc.AllocateAddress(&ec2.AllocateAddressInput{
+		Domain:  aws.String("vpc"),
+		Address: aws.String(i.IP4),
+		// Tagging after allocation
+		/*
+			TagSpecifications: []*ec2.TagSpecification{
+				{
+					ResourceType: aws.String("elastic-ip"),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String(ProjTagKey),
+							Value: aws.String(ProjTagVal),
+						},
+					},
+				},
+			},
+		*/
+	})
+	if allocRes.AllocationId != nil {
+		//eipallocId = *allocRes.AllocationId
+		i.IpAllocId = *allocRes.AllocationId
+	}
+	return err
+}
+
+func (e *Environment) ReleaseAddress(eipallocId string) error {
+
+	input := &ec2.ReleaseAddressInput{
+		AllocationId: aws.String(eipallocId),
+	}
+
+	result, err := e.SVC.ReleaseAddress(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	if verbose {
+		fmt.Printf("%s", result)
+	}
+	return err
+}
+
+func (i *Ec2Instance) AssociateAddress(svc *ec2.EC2) error {
+
+	input := &ec2.AssociateAddressInput{
+		AllocationId: aws.String(i.IpAllocId),
+		InstanceId:   aws.String(i.InstanceID),
+	}
+
+	result, err := svc.AssociateAddress(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+	}
+	if err == nil {
+		//id = *result.AssociationId
+		i.IpAssocId = *result.AssociationId
+	}
+	if verbose {
+		fmt.Println(result)
+	}
+	return err
+}
+
+func (e *Environment) DisassociateAddress(eipassocId string) error {
+
+	input := &ec2.DisassociateAddressInput{
+		AssociationId: aws.String(eipassocId),
+	}
+
+	result, err := e.SVC.DisassociateAddress(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	if verbose {
+		fmt.Println(result)
+	}
+	return err
+}
+
+func (e *Environment) Ip4List() map[string]string {
+
+	result, err := e.SVC.DescribeAddresses(&ec2.DescribeAddressesInput{
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("tag:EnvTag"),
+				Values: []*string{
+					aws.String(e.EnvTag),
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	ipList := make(map[string]string)
+	if len(result.Addresses) > 0 {
+		for _, v := range result.Addresses {
+
+			if v.AssociationId != nil {
+				ipList[*v.AllocationId] = *v.AssociationId
+			} else {
+				ipList[*v.AllocationId] = ""
+			}
+		}
+	}
+
+	return ipList
+}
+
 func init() {
 	eipCMD.AddCommand(eipListCMD, eipDescribeCMD, eipAllocateCMD, eipReleaseCMD, eipAssociateCMD, eipDisassociateCMD)
 

@@ -23,18 +23,8 @@ var igwCreateCMD = &cobra.Command{
 	Short: "Manually create Internet Gateway",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		err, igwId := CreateInternetGateway(svc)
-		if err == nil {
-			fmt.Printf("Internet Gateway created: %s\n", igwId)
-		}
+		e.CreateIGW()
+		AddTag(e.SVC, e.IgwId, "Project", e.Project)
 
 	},
 }
@@ -44,18 +34,7 @@ var igwDeleteCMD = &cobra.Command{
 	Short: "Manually delete Internet Gateway",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		err = DeleteInternetGateway(svc, igwId)
-		if err == nil {
-			fmt.Printf("Internet Gateway deleted (%s)\n", igwId)
-		}
+		e.DeleteIGW()
 
 	},
 }
@@ -65,18 +44,7 @@ var igwAttachCMD = &cobra.Command{
 	Short: "Manually attach Internet Gateway to VPV",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		err = AttachInternetGateway(svc, igwId, vpcId)
-		if err == nil {
-			fmt.Printf("Internet Gateway %s attached to %s\n", igwId, vpcId)
-		}
+		e.AttachIGW()
 
 	},
 }
@@ -86,18 +54,13 @@ var igwDetatchCMD = &cobra.Command{
 	Short: "Manually detatch Internet Gateway from VPC",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
+		if e.IgwId == "" {
+			e.IgwId = igwId
 		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		err = DetatchInternetGateway(svc, igwId, vpcId)
-		if err == nil {
-			fmt.Printf("Internet Gateway %s detached from %s\n", igwId, vpcId)
+		if e.VpcId == "" {
+			e.VpcId = vpcId
 		}
+		e.DetatchIGW()
 
 	},
 }
@@ -107,15 +70,7 @@ var igwDescribeCMD = &cobra.Command{
 	Short: "Describe Internet Gateway",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DescribeInternetGateway(svc, igwId)
+		e.DescribeIGW(igwId)
 
 	},
 }
@@ -124,37 +79,27 @@ var igwListCMD = &cobra.Command{
 	Use:   "list",
 	Short: "List Internet Gateway for project",
 	Run: func(cmd *cobra.Command, args []string) {
-
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = ListInternetGateway(svc)
+		e.ListIGW()
 
 	},
 }
 
-func CreateInternetGateway(svc *ec2.EC2) (error, string) {
+// Bundling function§
+//func (c *MainConfig) GetIgwId() error {
+func (e *Environment) GetIgwId() error {
 
-	input := &ec2.CreateInternetGatewayInput{
-		TagSpecifications: []*ec2.TagSpecification{
-			{
-				ResourceType: aws.String("internet-gateway"),
-				Tags: []*ec2.Tag{
-					{
-						Key:   aws.String(ProjTagKey),
-						Value: aws.String(ProjTagVal),
-					},
+	input := &ec2.DescribeInternetGatewaysInput{
+		Filters: []*ec2.Filter{
+			&ec2.Filter{
+				Name: aws.String("tag:EnvTag"),
+				Values: []*string{
+					aws.String(e.EnvTag),
 				},
 			},
 		},
 	}
 
-	result, err := svc.CreateInternetGateway(input)
+	result, err := e.SVC.DescribeInternetGateways(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -162,30 +107,70 @@ func CreateInternetGateway(svc *ec2.EC2) (error, string) {
 				fmt.Println(aerr.Error())
 			}
 		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
 			fmt.Println(err.Error())
 		}
 	}
 
-	var id string
-	if result != nil {
-		id = *result.InternetGateway.InternetGatewayId
+	for _, igws := range result.InternetGateways {
+		e.IgwId = *igws.InternetGatewayId
 	}
 
-	//fmt.Println(result)
-	return err, id
+	if len(result.InternetGateways) > 1 {
+		err = xsIdErr
+	} else if len(result.InternetGateways) < 1 {
+		err = noIdErr
+	}
+
+	return err
+}
+
+func (e *Environment) CreateIGW() error {
+
+	input := &ec2.CreateInternetGatewayInput{
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("internet-gateway"),
+				Tags: []*ec2.Tag{
+					{
+						Key:   aws.String("EnvTag"),
+						Value: aws.String(e.EnvTag),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := e.SVC.CreateInternetGateway(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+
+	if result != nil {
+		e.IgwId = *result.InternetGateway.InternetGatewayId
+	}
+	if verbose {
+		fmt.Println(result)
+	}
+	return err
 
 }
 
-func DeleteInternetGateway(svc *ec2.EC2, igwId string) error {
+//func (c *MainConfig) DeleteIGW(igwId string) error {
+func (e *Environment) DeleteIGW() error {
 
 	input := &ec2.DeleteInternetGatewayInput{
-		InternetGatewayId: aws.String(igwId),
+		InternetGatewayId: aws.String(e.IgwId),
 	}
 
 	// Success returns nil for result and err
-	result, err := svc.DeleteInternetGateway(input)
+	result, err := e.SVC.DeleteInternetGateway(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -207,15 +192,15 @@ func DeleteInternetGateway(svc *ec2.EC2, igwId string) error {
 
 }
 
-func AttachInternetGateway(svc *ec2.EC2, igwId, vpcId string) error {
+func (e *Environment) AttachIGW() error {
 
 	input := &ec2.AttachInternetGatewayInput{
-		InternetGatewayId: aws.String(igwId),
-		VpcId:             aws.String(vpcId),
+		InternetGatewayId: aws.String(e.IgwId),
+		VpcId:             aws.String(e.VpcId),
 	}
 
 	// Success returns nil for result and err
-	result, err := svc.AttachInternetGateway(input)
+	result, err := e.SVC.AttachInternetGateway(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -237,15 +222,15 @@ func AttachInternetGateway(svc *ec2.EC2, igwId, vpcId string) error {
 
 }
 
-func DetatchInternetGateway(svc *ec2.EC2, igwId, vpcId string) error {
+func (e *Environment) DetatchIGW() error {
 
 	input := &ec2.DetachInternetGatewayInput{
-		InternetGatewayId: aws.String(igwId),
-		VpcId:             aws.String(vpcId),
+		InternetGatewayId: aws.String(e.IgwId),
+		VpcId:             aws.String(e.VpcId),
 	}
 
 	// Success returns nil for result and err
-	result, err := svc.DetachInternetGateway(input)
+	result, err := e.SVC.DetachInternetGateway(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -267,20 +252,20 @@ func DetatchInternetGateway(svc *ec2.EC2, igwId, vpcId string) error {
 
 }
 
-func ListInternetGateway(svc *ec2.EC2) error {
+func (e *Environment) ListIGW() error {
 
 	input := &ec2.DescribeInternetGatewaysInput{
 		Filters: []*ec2.Filter{
 			{
-				Name: aws.String("tag:" + ProjTagKey),
+				Name: aws.String("tag:Project"),
 				Values: []*string{
-					aws.String(ProjTagVal),
+					aws.String(e.Project),
 				},
 			},
 		},
 	}
 
-	result, err := svc.DescribeInternetGateways(input)
+	result, err := e.SVC.DescribeInternetGateways(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -317,15 +302,16 @@ func ListInternetGateway(svc *ec2.EC2) error {
 	return err
 }
 
-func DescribeInternetGateway(svc *ec2.EC2, igwId string) error {
+func (e *Environment) DescribeIGW(igwId string) error {
 
 	input := &ec2.DescribeInternetGatewaysInput{
 		InternetGatewayIds: []*string{
+			//aws.String(e.IgwId),
 			aws.String(igwId),
 		},
 	}
 
-	result, err := svc.DescribeInternetGateways(input)
+	result, err := e.SVC.DescribeInternetGateways(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {

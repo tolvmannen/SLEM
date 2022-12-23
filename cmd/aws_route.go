@@ -24,45 +24,16 @@ var routeCreateCMD = &cobra.Command{
 	Short: "Manually create Route",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
+		if e.IgwId == "" {
+			e.IgwId = igwId
 		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-
-		err = CreateRoute(svc, igwId, rtbId)
-
-		if err == nil {
-			fmt.Printf("Route added to Route Table: %s\n", rtbId)
+		if e.RtbId == "" {
+			e.RtbId = rtbId
 		}
-
-	},
-}
-
-var routeCreate6CMD = &cobra.Command{
-	Use:   "create6",
-	Short: "Manually create Route",
-	Run: func(cmd *cobra.Command, args []string) {
-
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-
-		err = CreateRoute(svc, igwId, rtbId)
-
-		if err != nil {
-			fmt.Printf("Failed to create Toute Table, %v", err)
-		} else {
-			fmt.Printf("Added Rout to Route Table: %s\n", rtbId)
-		}
+		e.CreateRoute()
+		//if err == nil {
+		//	fmt.Printf("Route added to Route Table: %s\n", rtbId)
+		//}
 
 	},
 }
@@ -72,47 +43,23 @@ var routeDeleteCMD = &cobra.Command{
 	Short: "Manually delete Route",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DeleteRoute(svc, rtbId)
+		e.DeleteRoute(rtbId)
 
 	},
 }
 
-var routeDelete6CMD = &cobra.Command{
-	Use:   "delete6",
-	Short: "Manually delete Route",
-	Run: func(cmd *cobra.Command, args []string) {
+// Bundling functions
 
-		sess, err := CreateAwsSession()
-
-		if err != nil {
-			fmt.Printf("Session create error, %v", err)
-		}
-
-		// Create an EC2 service client.
-		svc := ec2.New(sess)
-		_ = DeleteRoute6(svc, rtbId)
-
-	},
-}
-
-func CreateRoute(svc *ec2.EC2, igwId, rtbId string) error {
+func (e *Environment) CreateRoute() error {
 
 	input := &ec2.CreateRouteInput{
-		GatewayId:            aws.String(igwId),
-		RouteTableId:         aws.String(rtbId),
+		GatewayId:            aws.String(e.IgwId),
+		RouteTableId:         aws.String(e.RtbId),
 		DestinationCidrBlock: aws.String("0.0.0.0/0"),
 		//DestinationIpv6CidrBlock: aws.String("::0/0"),
 	}
 
-	result, err := svc.CreateRoute(input)
+	result, err := e.SVC.CreateRoute(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -133,7 +80,7 @@ func CreateRoute(svc *ec2.EC2, igwId, rtbId string) error {
 
 }
 
-func DeleteRoute(svc *ec2.EC2, rtbId string) error {
+func (e *Environment) DeleteRoute(rtbId string) error {
 
 	input := &ec2.DeleteRouteInput{
 		RouteTableId:         aws.String(rtbId),
@@ -141,7 +88,7 @@ func DeleteRoute(svc *ec2.EC2, rtbId string) error {
 		//DestinationIpv6CidrBlock: aws.String("::0/0"),
 	}
 
-	result, err := svc.DeleteRoute(input)
+	result, err := e.SVC.DeleteRoute(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -158,7 +105,7 @@ func DeleteRoute(svc *ec2.EC2, rtbId string) error {
 	if verbose {
 		fmt.Println(result)
 	}
-	return nil
+	return err
 
 }
 
